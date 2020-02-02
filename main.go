@@ -45,7 +45,7 @@ func (discord *DiscordClient) Send(text, name, avatar string, embed interface{})
 		log.Fatal(err)
 	}
 
-    if res.StatusCode != http.StatusOK {
-    	log.Fatal("Couldn't send Discord message:", string(responseBody))
+	if res.StatusCode != http.StatusOK {
+		log.Fatal("Couldn't send Discord message:", string(responseBody))
 	}
 }

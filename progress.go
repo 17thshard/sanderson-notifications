@@ -117,7 +117,7 @@ func reportProgress(client *DiscordClient, progressBars []Progress) {
 		fullBlocks := int(math.Floor(float64(progress.Value) / blockSize))
 		embedBuilder.WriteRune('`')
 		embedBuilder.WriteString(strings.Repeat("█", fullBlocks))
-		embedBuilder.WriteString(strings.Repeat("░", blockCount - fullBlocks))
+		embedBuilder.WriteString(strings.Repeat("░", blockCount-fullBlocks))
 		embedBuilder.WriteString(fmt.Sprintf(" %3d%%", progress.Value))
 		embedBuilder.WriteRune('`')
 	}
