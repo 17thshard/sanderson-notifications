@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -34,8 +35,17 @@ func (discord *DiscordClient) Send(text, name, avatar string, embed interface{})
 		log.Fatal(err)
 	}
 
-	_, err = http.Post(discord.webhookUrl, "application/json", bytes.NewReader(serialized))
+	res, err := http.Post(discord.webhookUrl, "application/json", bytes.NewReader(serialized))
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	responseBody, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+    if res.StatusCode != http.StatusOK {
+    	log.Fatal("Couldn't send Discord message:", string(responseBody))
 	}
 }
