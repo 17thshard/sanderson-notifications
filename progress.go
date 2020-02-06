@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
-	"log"
 	"math"
 	"net/http"
 	"os"
@@ -25,32 +24,34 @@ const (
 )
 
 func CheckProgress(client *DiscordClient) {
+	Info.Println("Checking for progress updates...")
+
 	res, err := http.Get("https://brandonsanderson.com")
 	if err != nil {
-		log.Fatal("Could not read Brandon's blog", err.Error())
+		Error.Fatal("Could not read Brandon's blog", err.Error())
 	}
 	defer res.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
 	oldProgress := readOldProgress()
 	currentProgress := readProgress(doc)
 
 	if equal(oldProgress, currentProgress) {
-		log.Println("No progress changes to report.")
+		Info.Println("No progress changes to report.")
 		return
 	}
 
-	log.Println("Reporting changed progress bars...")
+	Info.Println("Reporting changed progress bars...")
 
 	reportProgress(client, currentProgress)
 
 	err = persistProgress(currentProgress)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 }
 
@@ -63,7 +64,7 @@ func readOldProgress() []Progress {
 	var oldProgress []Progress
 	err = json.Unmarshal(content, &oldProgress)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
 	return oldProgress
