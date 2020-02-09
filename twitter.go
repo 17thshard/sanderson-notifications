@@ -58,7 +58,14 @@ func retrieveLastTweet() string {
 
 func retrieveTweetsSince(token, lastTweet string) []Tweet {
 	client := &http.Client{}
-	timelineUrl := fmt.Sprintf("https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=BrandSanderson&since_id=%s", url.QueryEscape(lastTweet))
+	timelineUrl := fmt.Sprintf(
+		"https://api.twitter.com/1.1/statuses/user_timeline.json"+
+			"?screen_name=BrandSanderson"+
+			"&since_id=%s"+
+			"&exclude_replies=true"+
+			"&include_rts=false",
+		url.QueryEscape(lastTweet),
+	)
 
 	req, err := http.NewRequest("GET", timelineUrl, nil)
 
