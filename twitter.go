@@ -11,7 +11,8 @@ import (
 )
 
 type Tweet struct {
-	Id uint64
+	Id              uint64
+	RetweetedStatus *Tweet `json:"retweeted_status"`
 }
 
 func CheckTwitter(client *DiscordClient) {
@@ -33,8 +34,13 @@ func CheckTwitter(client *DiscordClient) {
 	Info.Printf("Reporting %d tweets...\n", len(tweets))
 
 	for i := len(tweets) - 1; i >= 0; i-- {
+		message := "Brandon just tweeted"
+		if tweets[i].RetweetedStatus != nil {
+			message = "Brandon just retweeted something"
+		}
+
 		client.Send(
-			fmt.Sprintf("[](https://twitter.com/BrandSanderson/status/%d )", tweets[i].Id),
+			fmt.Sprintf("%s https://twitter.com/BrandSanderson/status/%d", message, tweets[i].Id),
 			"Twitter",
 			"https://images-na.ssl-images-amazon.com/images/I/31KluT5nBkL._SY355_.png",
 			nil,
@@ -63,7 +69,7 @@ func retrieveTweetsSince(token, lastTweet string) []Tweet {
 			"?screen_name=BrandSanderson"+
 			"&since_id=%s"+
 			"&exclude_replies=true"+
-			"&include_rts=false",
+			"&include_rts=true",
 		url.QueryEscape(lastTweet),
 	)
 
@@ -76,7 +82,7 @@ func retrieveTweetsSince(token, lastTweet string) []Tweet {
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 	res, err := client.Do(req)
 	if err != nil {
-		Error.Fatal("Could not get tweets", err.Error())
+		Error.Fatal("Could not get tweets: ", err.Error())
 	}
 
 	defer res.Body.Close()
@@ -85,7 +91,7 @@ func retrieveTweetsSince(token, lastTweet string) []Tweet {
 	err = json.NewDecoder(res.Body).Decode(&result)
 
 	if err != nil {
-		Error.Fatal("Could not read tweets", err.Error())
+		Error.Fatal("Could not read tweets: ", err.Error())
 	}
 
 	return result
