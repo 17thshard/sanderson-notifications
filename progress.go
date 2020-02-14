@@ -74,6 +74,11 @@ func readProgress(doc *goquery.Document) []Progress {
 	bars := doc.Find(".vc_progress_bar .vc_label")
 	result := make([]Progress, bars.Length())
 
+	if bars.Length() == 0 {
+		html, _ := doc.Html()
+		Error.Fatal("Unexpectedly received empty list of progress bars, content was ", html)
+	}
+
 	bars.Each(func(i int, selection *goquery.Selection) {
 		title := strings.TrimSpace(selection.Contents().Not("span").Text())
 		link := selection.Find("a").AttrOr("href", "")
