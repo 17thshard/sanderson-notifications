@@ -18,6 +18,14 @@ type Progress struct {
 	Value int
 }
 
+type ProgressDiff struct {
+	Title    string
+	Link     string
+	OldValue int
+	Value    int
+	New      bool
+}
+
 const (
 	blockSize  = 2.5
 	blockCount = 100 / blockSize
@@ -40,14 +48,16 @@ func CheckProgress(client *DiscordClient) {
 	oldProgress := readOldProgress()
 	currentProgress := readProgress(doc)
 
-	if equal(oldProgress, currentProgress) {
+	differences := diff(oldProgress, currentProgress)
+
+	if differences == nil {
 		Info.Println("No progress changes to report.")
 		return
 	}
 
 	Info.Println("Reporting changed progress bars...")
 
-	reportProgress(client, currentProgress)
+	reportProgress(client, differences)
 
 	err = persistProgress(currentProgress)
 	if err != nil {
@@ -92,21 +102,44 @@ func readProgress(doc *goquery.Document) []Progress {
 	return result
 }
 
-func equal(a, b []Progress) bool {
-	if len(a) != len(b) {
-		return false
+func diff(old, new []Progress) []ProgressDiff {
+	result := make([]ProgressDiff, len(new), len(new))
+	oldKeyed := make(map[string]Progress)
+
+	for _, v := range old {
+		oldKeyed[v.Title] = v
 	}
 
-	for i, v := range a {
-		if v != b[i] {
-			return false
+	noChanges := true
+	for i, v := range new {
+		existing, existedBefore := oldKeyed[v.Title]
+
+		oldValue := 0
+		if existedBefore {
+			oldValue = existing.Value
+		}
+
+		result[i] = ProgressDiff{
+			v.Title,
+			v.Link,
+			oldValue,
+			v.Value,
+			!existedBefore,
+		}
+
+		if !existedBefore || oldValue != v.Value {
+			noChanges = false
 		}
 	}
 
-	return true
+	if noChanges {
+		return nil
+	}
+
+	return result
 }
 
-func reportProgress(client *DiscordClient, progressBars []Progress) {
+func reportProgress(client *DiscordClient, progressBars []ProgressDiff) {
 	var embedBuilder strings.Builder
 
 	for i, progress := range progressBars {
@@ -117,6 +150,11 @@ func reportProgress(client *DiscordClient, progressBars []Progress) {
 		title := progress.Title
 		if len(progress.Link) > 0 {
 			title = fmt.Sprintf("[%s](%s)", progress.Title, progress.Link)
+		}
+		if progress.New {
+			title = fmt.Sprintf("[New] %s", title)
+		} else if progress.Value != progress.OldValue {
+			title = fmt.Sprintf("[Changed] %s (%d%% → %d%%)", title, progress.OldValue, progress.Value)
 		}
 		embedBuilder.WriteString(fmt.Sprintf("**%s**\n", title))
 
