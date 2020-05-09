@@ -7,12 +7,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 var (
 	Info  *log.Logger
 	Error *log.Logger
 )
+
+type RateLimitResponse struct {
+	Delay int `json:"retry_after"`
+}
 
 func initLog() {
 	Info = log.New(os.Stdout,
@@ -39,6 +44,10 @@ type DiscordClient struct {
 }
 
 func (discord *DiscordClient) Send(text, name, avatar string, embed interface{}) {
+	discord.trySend(text, name, avatar, embed, 0)
+}
+
+func (discord *DiscordClient) trySend(text, name, avatar string, embed interface{}, try int) {
 	body := map[string]interface{}{
 		"username":   name,
 		"avatar_url": avatar,
@@ -62,6 +71,23 @@ func (discord *DiscordClient) Send(text, name, avatar string, embed interface{})
 	responseBody, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		Error.Fatal(err)
+	}
+
+	if res.StatusCode == http.StatusTooManyRequests {
+		if try == 2 {
+			Error.Println("Couldn't send Discord message: Rate limiting still applied after 3 retries")
+		}
+
+		var data RateLimitResponse
+		if err := json.Unmarshal(responseBody, &data); err != nil {
+			Error.Fatal(err)
+		}
+
+		Info.Printf("Being rate late limited by Discord, waiting for %dms\n", data.Delay)
+		time.Sleep(time.Duration(data.Delay) * time.Millisecond)
+
+		discord.trySend(text, name, avatar, embed, try+1)
+		return
 	}
 
 	if res.StatusCode != http.StatusNoContent {
