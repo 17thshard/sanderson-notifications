@@ -6,6 +6,7 @@ This is a simple Go application generating Discord messages from the media chann
 Currently the following channels trigger a notification:
  * [Twitter](https://twitter.com/BrandSanderson)
  * Progress Updates on the [author's website](https://brandonsanderson.com)
+ * [YouTube](https://www.youtube.com/channel/UC3g-w83Cb5pEAu5UmRrge-A)
 
 Executing the application performs a single round of checks for updates, so it must be used from
 an external task scheduler - such as `cron` - for periodic checks.
