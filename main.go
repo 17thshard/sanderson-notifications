@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -35,8 +36,31 @@ func main() {
 	Info.Println("Checking for updates...")
 
 	client := &DiscordClient{os.Getenv("DISCORD_WEBHOOK")}
-	CheckProgress(client)
-	CheckTwitter(client)
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+
+	erroredChannel := make(chan interface{})
+
+	go CheckProgress(client, &wg, erroredChannel)
+	go CheckTwitter(client, &wg, erroredChannel)
+
+	errored := false
+
+	go func() {
+		for {
+			select {
+			case <-erroredChannel:
+				errored = true
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	if errored {
+		Error.Fatal("Errors occurred while trying to check for updates")
+	}
 }
 
 type DiscordClient struct {

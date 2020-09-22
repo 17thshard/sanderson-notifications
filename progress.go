@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Progress struct {
@@ -31,22 +32,39 @@ const (
 	blockCount = 100 / blockSize
 )
 
-func CheckProgress(client *DiscordClient) {
+func CheckProgress(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
+	defer wg.Done()
+
 	Info.Println("Checking for progress updates...")
 
 	res, err := http.Get("https://brandonsanderson.com")
 	if err != nil {
-		Error.Fatal("Could not read Brandon's blog", err.Error())
+		Error.Println("Could not read Brandon's blog", err.Error())
+		errored <- nil
+		return
 	}
 	defer res.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		Error.Fatal(err)
+		Error.Println(err)
+		errored <- nil
+		return
 	}
 
-	oldProgress := readOldProgress()
-	currentProgress := readProgress(doc)
+	oldProgress, err := readOldProgress()
+	if err != nil {
+		Error.Println(err)
+		errored <- nil
+		return
+	}
+
+	currentProgress, err := readProgress(doc)
+	if err != nil {
+		Error.Println(err)
+		errored <- nil
+		return
+	}
 
 	differences := diff(oldProgress, currentProgress)
 
@@ -61,11 +79,12 @@ func CheckProgress(client *DiscordClient) {
 
 	err = persistProgress(currentProgress)
 	if err != nil {
-		Error.Fatal(err)
+		Error.Println(err)
+		errored <- nil
 	}
 }
 
-func readOldProgress() []Progress {
+func readOldProgress() ([]Progress, error) {
 	content, err := ioutil.ReadFile("last_progress.json")
 	if os.IsNotExist(err) {
 		content = []byte("[]")
@@ -74,19 +93,19 @@ func readOldProgress() []Progress {
 	var oldProgress []Progress
 	err = json.Unmarshal(content, &oldProgress)
 	if err != nil {
-		Error.Fatal(err)
+		return nil, err
 	}
 
-	return oldProgress
+	return oldProgress, nil
 }
 
-func readProgress(doc *goquery.Document) []Progress {
+func readProgress(doc *goquery.Document) ([]Progress, error) {
 	bars := doc.Find(".vc_progress_bar .vc_label")
 	result := make([]Progress, bars.Length())
 
 	if bars.Length() == 0 {
 		html, _ := doc.Html()
-		Error.Fatal("Unexpectedly received empty list of progress bars, content was ", html)
+		return nil, fmt.Errorf("Unexpectedly received empty list of progress bars, content was %s", html)
 	}
 
 	bars.Each(func(i int, selection *goquery.Selection) {
@@ -99,7 +118,7 @@ func readProgress(doc *goquery.Document) []Progress {
 		result[i] = Progress{title, link, parsedValue}
 	})
 
-	return result
+	return result, nil
 }
 
 func diff(old, new []Progress) []ProgressDiff {

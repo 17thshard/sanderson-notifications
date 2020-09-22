@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
 )
 
 type Tweet struct {
@@ -15,16 +16,31 @@ type Tweet struct {
 	RetweetedStatus *Tweet `json:"retweeted_status"`
 }
 
-func CheckTwitter(client *DiscordClient) {
+func CheckTwitter(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
+	defer wg.Done()
+
 	Info.Println("Checking for new tweets...")
 	twitterToken := os.Getenv("TWITTER_TOKEN")
 
 	if len(twitterToken) == 0 {
-		Error.Fatal("Missing Twitter token")
+		Error.Println("Missing Twitter token")
+		errored <- nil
+		return
 	}
 
-	lastTweet := retrieveLastTweet()
-	tweets := retrieveTweetsSince(twitterToken, lastTweet)
+	lastTweet, err := retrieveLastTweet()
+	if err != nil {
+		Error.Println(err)
+		errored <- nil
+		return
+	}
+
+	tweets, err := retrieveTweetsSince(twitterToken, lastTweet)
+	if err != nil {
+		Error.Println(err)
+		errored <- nil
+		return
+	}
 
 	if len(tweets) == 0 {
 		Info.Println("No tweets to report.")
@@ -47,22 +63,24 @@ func CheckTwitter(client *DiscordClient) {
 		)
 	}
 
-	err := ioutil.WriteFile("last_tweet", []byte(strconv.FormatUint(tweets[0].Id, 10)), 0644)
+	err = ioutil.WriteFile("last_tweet", []byte(strconv.FormatUint(tweets[0].Id, 10)), 0644)
 	if err != nil {
-		Error.Fatal(err)
+		Error.Println(err)
+		errored <- nil
+		return
 	}
 }
 
-func retrieveLastTweet() string {
+func retrieveLastTweet() (string, error) {
 	content, err := ioutil.ReadFile("last_tweet")
 	if os.IsNotExist(err) {
-		Error.Fatal("Could not determine last reported tweet")
+		return "", fmt.Errorf("Could not determine last reported tweet")
 	}
 
-	return string(content)
+	return string(content), nil
 }
 
-func retrieveTweetsSince(token, lastTweet string) []Tweet {
+func retrieveTweetsSince(token, lastTweet string) ([]Tweet, error) {
 	client := &http.Client{}
 	timelineUrl := fmt.Sprintf(
 		"https://api.twitter.com/1.1/statuses/user_timeline.json"+
@@ -76,13 +94,13 @@ func retrieveTweetsSince(token, lastTweet string) []Tweet {
 	req, err := http.NewRequest("GET", timelineUrl, nil)
 
 	if err != nil {
-		Error.Fatal("Could not get tweets")
+		return nil, fmt.Errorf("Could not get tweets")
 	}
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 	res, err := client.Do(req)
 	if err != nil {
-		Error.Fatal("Could not get tweets: ", err.Error())
+		return nil, fmt.Errorf("Could not get tweets: ", err.Error())
 	}
 
 	defer res.Body.Close()
@@ -91,8 +109,8 @@ func retrieveTweetsSince(token, lastTweet string) []Tweet {
 	err = json.NewDecoder(res.Body).Decode(&result)
 
 	if err != nil {
-		Error.Fatal("Could not read tweets: ", err.Error())
+		return nil, fmt.Errorf("Could not read tweets: ", err.Error())
 	}
 
-	return result
+	return result, nil
 }
