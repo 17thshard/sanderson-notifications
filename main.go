@@ -38,12 +38,13 @@ func main() {
 	client := &DiscordClient{os.Getenv("DISCORD_WEBHOOK")}
 	var wg sync.WaitGroup
 
-	wg.Add(2)
+	wg.Add(3)
 
 	erroredChannel := make(chan interface{})
 
 	go CheckProgress(client, &wg, erroredChannel)
 	go CheckTwitter(client, &wg, erroredChannel)
+	go CheckYouTube(client, &wg, erroredChannel)
 
 	errored := false
 
