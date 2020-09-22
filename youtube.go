@@ -9,6 +9,11 @@ import (
 	"sync"
 )
 
+type YouTubePost struct {
+	Title string
+	Link  string
+}
+
 func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
 	defer wg.Done()
 
@@ -37,22 +42,38 @@ func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 
 	lastEntryId := readLastFeedEntryId()
 
+	var entries []YouTubePost
+
 	for _, entry := range atomFeed.Entries {
 		if entry.ID == lastEntryId {
 			break
 		}
 
+		entries = append([]YouTubePost{{
+			Title: entry.Title,
+			Link:  entry.Links[0].Href,
+		}}, entries...)
+	}
+
+	if len(entries) == 0 {
+		Info.Println("No YouTube posts to report.")
+		return
+	}
+
+	Info.Println("Reporting YouTube posts...")
+
+	for _, entry := range entries {
 		message := "Brandon just posted something on YouTube"
 
 		client.Send(
-			fmt.Sprintf("%s %s", message, entry.Links[0].Href),
+			fmt.Sprintf("%s %s", message, entry.Link),
 			"YouTube",
 			"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/YouTube_icon.png/640px-YouTube_icon.png",
 			nil,
 		)
-	}
 
-	Info.Println("Reporting changed progress bars...")
+		Info.Println("Reported YouTube post ", entry.Title)
+	}
 
 	// First entry is "last" as in newest
 	err = persistLastFeedEntryId(atomFeed.Entries[0].ID)
