@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -77,7 +78,7 @@ func retrieveLastTweet() (string, error) {
 		return "", fmt.Errorf("Could not determine last reported tweet")
 	}
 
-	return string(content), nil
+	return strings.TrimSpace(string(content)), nil
 }
 
 func retrieveTweetsSince(token, lastTweet string) ([]Tweet, error) {

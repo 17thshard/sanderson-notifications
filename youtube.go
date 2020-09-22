@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -90,7 +91,7 @@ func readLastFeedEntryId() string {
 		return ""
 	}
 
-	return string(content)
+	return strings.TrimSpace(string(content))
 }
 
 func persistLastFeedEntryId(id string) error {
