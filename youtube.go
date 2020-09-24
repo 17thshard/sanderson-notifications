@@ -6,14 +6,17 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
+	"regexp"
 	"sync"
 )
 
 type YouTubePost struct {
+	ID    string
 	Title string
 	Link  string
 }
+
+const feedIdDir = "youtube_feed_entries"
 
 func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
 	defer wg.Done()
@@ -41,29 +44,28 @@ func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 		return
 	}
 
-	lastEntryId := readLastFeedEntryId()
-
-	var entries []YouTubePost
+	var sortedEntries []YouTubePost
 
 	for _, entry := range atomFeed.Entries {
-		if entry.ID == lastEntryId {
-			break
+		if hasHandledFeedEntryId(entry.ID) {
+			continue
 		}
 
-		entries = append([]YouTubePost{{
+		sortedEntries = append([]YouTubePost{{
+			ID:    entry.ID,
 			Title: entry.Title,
 			Link:  entry.Links[0].Href,
-		}}, entries...)
+		}}, sortedEntries...)
 	}
 
-	if len(entries) == 0 {
+	if len(sortedEntries) == 0 {
 		Info.Println("No YouTube posts to report.")
 		return
 	}
 
 	Info.Println("Reporting YouTube posts...")
 
-	for _, entry := range entries {
+	for _, entry := range sortedEntries {
 		message := "Brandon just posted something on YouTube"
 
 		client.Send(
@@ -73,27 +75,39 @@ func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 			nil,
 		)
 
+		err = persistFeedEntryId(entry.ID)
+		if err != nil {
+			Error.Println(err)
+			errored <- nil
+			return
+		}
+
 		Info.Println("Reported YouTube post ", entry.Title)
 	}
-
-	// First entry is "last" as in newest
-	err = persistLastFeedEntryId(atomFeed.Entries[0].ID)
-	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
-	}
 }
 
-func readLastFeedEntryId() string {
-	content, err := ioutil.ReadFile("last_yt_feed_entry")
-	if os.IsNotExist(err) {
-		return ""
+func hasHandledFeedEntryId(id string) bool {
+	if _, err := os.Stat(buildFeedEntryIdPath(id)); os.IsNotExist(err) {
+		return false
 	}
 
-	return strings.TrimSpace(string(content))
+	return true
 }
 
-func persistLastFeedEntryId(id string) error {
-	return ioutil.WriteFile("last_yt_feed_entry", []byte(id), 0644)
+func persistFeedEntryId(id string) error {
+	if _, err := os.Stat(feedIdDir); os.IsNotExist(err) {
+		err = os.Mkdir(feedIdDir, os.ModePerm)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return ioutil.WriteFile(buildFeedEntryIdPath(id), []byte(id), 0644)
+}
+
+func buildFeedEntryIdPath(id string) string {
+	var re = regexp.MustCompile("[^a-zA-Z0-9.\\-]")
+
+	return fmt.Sprintf("%s/%s", feedIdDir, re.ReplaceAllString(id, "_"))
 }
