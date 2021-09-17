@@ -1,6 +1,7 @@
-package main
+package plugins
 
 import (
+	"17thshard.com/sanderson-notifications/common"
 	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
@@ -10,8 +11,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 )
+
+type ProgressPlugin struct {
+}
+
+func (plugin ProgressPlugin) Name() string {
+	return "twitter"
+}
 
 type Progress struct {
 	Title string
@@ -32,56 +39,46 @@ const (
 	blockCount = 100 / blockSize
 )
 
-func CheckProgress(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
-	defer wg.Done()
-
-	Info.Println("Checking for progress updates...")
+func (plugin ProgressPlugin) Check(context PluginContext) error {
+	context.Info.Println("Checking for progress updates...")
 
 	res, err := http.Get("https://brandonsanderson.com")
 	if err != nil {
-		Error.Println("Could not read Brandon's blog", err.Error())
-		errored <- nil
-		return
+		return fmt.Errorf("could not read Brandon's blog: %w", err)
 	}
 	defer res.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
 
 	oldProgress, err := readOldProgress()
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
 
 	currentProgress, err := readProgress(doc)
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
 
 	differences := diff(oldProgress, currentProgress)
 
 	if differences == nil {
-		Info.Println("No progress changes to report.")
-		return
+		context.Info.Println("No progress changes to report.")
+		return nil
 	}
 
-	Info.Println("Reporting changed progress bars...")
+	context.Info.Println("Reporting changed progress bars...")
 
-	reportProgress(client, differences)
+	reportProgress(context.Discord, differences)
 
 	err = persistProgress(currentProgress)
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
+		return err
 	}
+	return nil
 }
 
 func readOldProgress() ([]Progress, error) {
@@ -158,7 +155,7 @@ func diff(old, new []Progress) []ProgressDiff {
 	return result
 }
 
-func reportProgress(client *DiscordClient, progressBars []ProgressDiff) {
+func reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) {
 	var embedBuilder strings.Builder
 
 	for i, progress := range progressBars {

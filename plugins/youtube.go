@@ -1,4 +1,4 @@
-package main
+package plugins
 
 import (
 	"fmt"
@@ -7,8 +7,16 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"sync"
 )
+
+type YouTubePlugin struct {
+}
+
+const feedIdDir = "youtube_feed_entries"
+
+func (plugin YouTubePlugin) Name() string {
+	return "youtube"
+}
 
 type YouTubePost struct {
 	ID    string
@@ -16,32 +24,24 @@ type YouTubePost struct {
 	Link  string
 }
 
-const feedIdDir = "youtube_feed_entries"
-
-func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
-	defer wg.Done()
-
-	Info.Println("Checking for YouTube updates...")
+func (plugin YouTubePlugin) Check(context PluginContext) error {
+	context.Info.Println("Checking for YouTube updates...")
 
 	res, err := http.Get("https://www.youtube.com/feeds/videos.xml?channel_id=UC3g-w83Cb5pEAu5UmRrge-A")
 	if err != nil {
-		Error.Println("Could not read Brandon's YouTube feed", err.Error())
-		errored <- nil
-		return
+		return fmt.Errorf("could not read Brandons YouTube feed: %w", err)
 	}
 	defer res.Body.Close()
 
 	fp := atom.Parser{}
 	atomFeed, err := fp.Parse(res.Body)
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
 
 	if len(atomFeed.Entries) == 0 {
-		Info.Println("No entries in YouTube feed.")
-		return
+		context.Info.Println("No entries in YouTube feed.")
+		return nil
 	}
 
 	var sortedEntries []YouTubePost
@@ -59,16 +59,16 @@ func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 	}
 
 	if len(sortedEntries) == 0 {
-		Info.Println("No YouTube posts to report.")
-		return
+		context.Info.Println("No YouTube posts to report.")
+		return nil
 	}
 
-	Info.Println("Reporting YouTube posts...")
+	context.Info.Println("Reporting YouTube posts...")
 
 	for _, entry := range sortedEntries {
 		message := "Brandon just posted something on YouTube"
 
-		client.Send(
+		context.Discord.Send(
 			fmt.Sprintf("%s %s", message, entry.Link),
 			"YouTube",
 			"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/YouTube_icon.png/640px-YouTube_icon.png",
@@ -77,13 +77,13 @@ func CheckYouTube(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 
 		err = persistFeedEntryId(entry.ID)
 		if err != nil {
-			Error.Println(err)
-			errored <- nil
-			return
+			return err
 		}
 
-		Info.Println("Reported YouTube post ", entry.Title)
+		context.Info.Println("Reported YouTube post ", entry.Title)
 	}
+
+	return nil
 }
 
 func hasHandledFeedEntryId(id string) bool {

@@ -1,50 +1,68 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
-	"log"
-	"net/http"
+	. "17thshard.com/sanderson-notifications/common"
+	. "17thshard.com/sanderson-notifications/plugins"
+	"flag"
+	"fmt"
 	"os"
 	"sync"
-	"time"
 )
-
-var (
-	Info  *log.Logger
-	Error *log.Logger
-)
-
-type RateLimitResponse struct {
-	Delay int `json:"retry_after"`
-}
-
-func initLog() {
-	Info = log.New(os.Stdout,
-		"[INFO] ",
-		log.Ldate|log.Ltime)
-
-	Error = log.New(os.Stderr,
-		"[ERROR] ",
-		log.Ldate|log.Ltime)
-}
 
 func main() {
-	initLog()
+	infoLog, errorLog := CreateLoggers("main")
 
-	Info.Println("Checking for updates...")
+	configPath := flag.String("config", "config.yml", "path of YAML config file")
+	flag.Parse()
 
-	client := &DiscordClient{os.Getenv("DISCORD_WEBHOOK")}
+	configLoader := ConfigLoader{
+		AvailablePlugins: map[string]func() Plugin{
+			"progress": func() Plugin {
+				return ProgressPlugin{}
+			},
+			"twitter": func() Plugin {
+				return TwitterPlugin{}
+			},
+			"youtube": func() Plugin {
+				return YouTubePlugin{}
+			},
+		},
+	}
+	config, err := configLoader.Load(*configPath)
+	if err != nil {
+		errorLog.Fatalf("Failed to load config: %w", err)
+	}
+
+	if len(config.Connectors) == 0 {
+		errorLog.Println("Config did not contain any connectors. Consider configuring one of the following plugins:")
+		for plugin := range configLoader.AvailablePlugins {
+			errorLog.Printf(" - %s", plugin)
+		}
+		os.Exit(1)
+	}
+
+	infoLog.Printf("Loaded configuration with %d connectors", len(config.Connectors))
+	infoLog.Println("Checking for updates...")
+
+	client := CreateDiscordClient(os.Getenv("DISCORD_WEBHOOK"))
+
 	var wg sync.WaitGroup
-
-	wg.Add(3)
+	wg.Add(len(config.Connectors))
 
 	erroredChannel := make(chan interface{})
 
-	go CheckProgress(client, &wg, erroredChannel)
-	go CheckTwitter(client, &wg, erroredChannel)
-	go CheckYouTube(client, &wg, erroredChannel)
+	for _, connector := range config.Connectors {
+		connector := connector
+		connectorInfo, connectorError := CreateLoggers(fmt.Sprintf("connector=%s", connector.Name))
+		context := PluginContext{Discord: &client, Info: connectorInfo, Error: connectorError}
+		go func() {
+			defer wg.Done()
+			if err := connector.Plugin.Check(context); err != nil {
+				context.Error.Printf("Check for connector '%s' failed: %w", connector.Name, err)
+				erroredChannel <- nil
+			}
+		}()
+	}
 
 	errored := false
 
@@ -60,62 +78,6 @@ func main() {
 	wg.Wait()
 
 	if errored {
-		Error.Fatal("Errors occurred while trying to check for updates")
-	}
-}
-
-type DiscordClient struct {
-	webhookUrl string
-}
-
-func (discord *DiscordClient) Send(text, name, avatar string, embed interface{}) {
-	discord.trySend(text, name, avatar, embed, 0)
-}
-
-func (discord *DiscordClient) trySend(text, name, avatar string, embed interface{}, try int) {
-	body := map[string]interface{}{
-		"username":   name,
-		"avatar_url": avatar,
-		"content":    text,
-	}
-
-	if embed != nil {
-		body["embeds"] = []interface{}{embed}
-	}
-
-	serialized, err := json.Marshal(body)
-	if err != nil {
-		Error.Fatal(err)
-	}
-
-	res, err := http.Post(discord.webhookUrl, "application/json", bytes.NewReader(serialized))
-	if err != nil {
-		Error.Fatal(err)
-	}
-
-	responseBody, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		Error.Fatal(err)
-	}
-
-	if res.StatusCode == http.StatusTooManyRequests {
-		if try == 2 {
-			Error.Println("Couldn't send Discord message: Rate limiting still applied after 3 retries")
-		}
-
-		var data RateLimitResponse
-		if err := json.Unmarshal(responseBody, &data); err != nil {
-			Error.Fatal(err)
-		}
-
-		Info.Printf("Being rate late limited by Discord, waiting for %dms\n", data.Delay)
-		time.Sleep(time.Duration(data.Delay) * time.Millisecond)
-
-		discord.trySend(text, name, avatar, embed, try+1)
-		return
-	}
-
-	if res.StatusCode != http.StatusNoContent {
-		Error.Fatal("Couldn't send Discord message: ", string(responseBody))
+		errorLog.Fatal("Errors occurred while trying to check for updates")
 	}
 }

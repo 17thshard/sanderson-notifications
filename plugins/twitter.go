@@ -1,4 +1,4 @@
-package main
+package plugins
 
 import (
 	"encoding/json"
@@ -9,46 +9,44 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 )
+
+type TwitterPlugin struct {
+}
+
+func (plugin TwitterPlugin) Name() string {
+	return "twitter"
+}
 
 type Tweet struct {
 	Id              uint64
 	RetweetedStatus *Tweet `json:"retweeted_status"`
 }
 
-func CheckTwitter(client *DiscordClient, wg *sync.WaitGroup, errored chan interface{}) {
-	defer wg.Done()
-
-	Info.Println("Checking for new tweets...")
+func (plugin TwitterPlugin) Check(context PluginContext) error {
+	context.Info.Println("Checking for new tweets...")
 	twitterToken := os.Getenv("TWITTER_TOKEN")
 
 	if len(twitterToken) == 0 {
-		Error.Println("Missing Twitter token")
-		errored <- nil
-		return
+		return fmt.Errorf("missing Twitter token")
 	}
 
 	lastTweet, err := retrieveLastTweet()
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
 
 	tweets, err := retrieveTweetsSince(twitterToken, lastTweet)
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
 
 	if len(tweets) == 0 {
-		Info.Println("No tweets to report.")
-		return
+		context.Info.Println("No tweets to report.")
+		return nil
 	}
 
-	Info.Printf("Reporting %d tweets...\n", len(tweets))
+	context.Info.Printf("Reporting %d tweets...\n", len(tweets))
 
 	for i := len(tweets) - 1; i >= 0; i-- {
 		message := "Brandon just tweeted"
@@ -56,7 +54,7 @@ func CheckTwitter(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 			message = "Brandon just retweeted something"
 		}
 
-		client.Send(
+		context.Discord.Send(
 			fmt.Sprintf("%s https://twitter.com/BrandSanderson/status/%d", message, tweets[i].Id),
 			"Twitter",
 			"https://images-na.ssl-images-amazon.com/images/I/31KluT5nBkL._SY355_.png",
@@ -66,10 +64,10 @@ func CheckTwitter(client *DiscordClient, wg *sync.WaitGroup, errored chan interf
 
 	err = ioutil.WriteFile("last_tweet", []byte(strconv.FormatUint(tweets[0].Id, 10)), 0644)
 	if err != nil {
-		Error.Println(err)
-		errored <- nil
-		return
+		return err
 	}
+
+	return nil
 }
 
 func retrieveLastTweet() (string, error) {
