@@ -8,6 +8,8 @@ import (
 type Plugin interface {
 	Name() string
 
+	Validate() error
+
 	Check(ctx PluginContext) error
 }
 

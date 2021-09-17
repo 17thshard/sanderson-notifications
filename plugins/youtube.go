@@ -5,17 +5,33 @@ import (
 	"github.com/mmcdole/gofeed/atom"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 )
 
 type YouTubePlugin struct {
+	ChannelId string `yaml:"channelId"`
+	Nickname  string
+	Message   string
 }
 
 const feedIdDir = "youtube_feed_entries"
 
 func (plugin YouTubePlugin) Name() string {
 	return "youtube"
+}
+
+func (plugin YouTubePlugin) Validate() error {
+	if len(plugin.ChannelId) == 0 {
+		return fmt.Errorf("channel ID for YouTube must not be empty")
+	}
+
+	if len(plugin.Nickname) == 0 && len(plugin.Message) == 0 {
+		return fmt.Errorf("either a channel nickname or a YouTube post message must be given")
+	}
+
+	return nil
 }
 
 type YouTubePost struct {
@@ -27,9 +43,9 @@ type YouTubePost struct {
 func (plugin YouTubePlugin) Check(context PluginContext) error {
 	context.Info.Println("Checking for YouTube updates...")
 
-	res, err := http.Get("https://www.youtube.com/feeds/videos.xml?channel_id=UC3g-w83Cb5pEAu5UmRrge-A")
+	res, err := http.Get(fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", url.QueryEscape(plugin.ChannelId)))
 	if err != nil {
-		return fmt.Errorf("could not read Brandons YouTube feed: %w", err)
+		return fmt.Errorf("could not read YouTube feed for channel '%s': %w", plugin.ChannelId, err)
 	}
 	defer res.Body.Close()
 
@@ -66,7 +82,10 @@ func (plugin YouTubePlugin) Check(context PluginContext) error {
 	context.Info.Println("Reporting YouTube posts...")
 
 	for _, entry := range sortedEntries {
-		message := "Brandon just posted something on YouTube"
+		message := fmt.Sprintf("%s posted something on YouTube", plugin.Nickname)
+		if len(plugin.Message) > 0 {
+			message = plugin.Message
+		}
 
 		context.Discord.Send(
 			fmt.Sprintf("%s %s", message, entry.Link),

@@ -30,7 +30,7 @@ func main() {
 	}
 	config, err := configLoader.Load(*configPath)
 	if err != nil {
-		errorLog.Fatalf("Failed to load config: %w", err)
+		errorLog.Fatalf("Failed to load config: %s", err)
 	}
 
 	if len(config.Connectors) == 0 {
@@ -58,7 +58,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			if err := connector.Plugin.Check(context); err != nil {
-				context.Error.Printf("Check for connector '%s' failed: %w", connector.Name, err)
+				context.Error.Printf("Check for connector '%s' failed: %s", connector.Name, err)
 				erroredChannel <- nil
 			}
 		}()

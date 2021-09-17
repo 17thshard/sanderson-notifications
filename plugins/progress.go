@@ -14,10 +14,24 @@ import (
 )
 
 type ProgressPlugin struct {
+	Url     string
+	Message string
 }
 
 func (plugin ProgressPlugin) Name() string {
 	return "twitter"
+}
+
+func (plugin ProgressPlugin) Validate() error {
+	if len(plugin.Url) == 0 {
+		return fmt.Errorf("URL for progress updates must not be empty")
+	}
+
+	if len(plugin.Message) == 0 {
+		return fmt.Errorf("message for progress updates must not be empty")
+	}
+
+	return nil
 }
 
 type Progress struct {
@@ -42,9 +56,9 @@ const (
 func (plugin ProgressPlugin) Check(context PluginContext) error {
 	context.Info.Println("Checking for progress updates...")
 
-	res, err := http.Get("https://brandonsanderson.com")
+	res, err := http.Get(plugin.Url)
 	if err != nil {
-		return fmt.Errorf("could not read Brandon's blog: %w", err)
+		return fmt.Errorf("could not read progress site '%s': %w", plugin.Url, err)
 	}
 	defer res.Body.Close()
 
@@ -72,7 +86,7 @@ func (plugin ProgressPlugin) Check(context PluginContext) error {
 
 	context.Info.Println("Reporting changed progress bars...")
 
-	reportProgress(context.Discord, differences)
+	plugin.reportProgress(context.Discord, differences)
 
 	err = persistProgress(currentProgress)
 	if err != nil {
@@ -155,7 +169,7 @@ func diff(old, new []Progress) []ProgressDiff {
 	return result
 }
 
-func reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) {
+func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) {
 	var embedBuilder strings.Builder
 
 	for i, progress := range progressBars {
@@ -185,12 +199,12 @@ func reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) {
 	embed := map[string]interface{}{
 		"description": embedBuilder.String(),
 		"footer": map[string]interface{}{
-			"text": "See https://brandonsanderson.com for more",
+			"text": fmt.Sprintf("See %s for more", plugin.Url),
 		},
 	}
 
 	client.Send(
-		"There just has been an update to the progress bars on Brandon's website!",
+		plugin.Message,
 		"Progress Updates",
 		"https://www.17thshard.com/forum/uploads/monthly_2017_12/Dragonsteelblack.png.500984e8ce0aad0dce1c7fb779b90c44.png",
 		embed,

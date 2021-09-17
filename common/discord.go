@@ -3,12 +3,14 @@ package common
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
+
+const webhookBaseUrl = "https://discord.com/api/webhooks"
 
 type DiscordClient struct {
 	webhookUrl string
@@ -16,15 +18,13 @@ type DiscordClient struct {
 	error      *log.Logger
 }
 
-func CreateDiscordClient(webhookUrl string) DiscordClient {
+func CreateDiscordClient(webhook string) DiscordClient {
+	infoLog, errorLog := CreateLoggers("main")
+
 	return DiscordClient{
-		webhookUrl: webhookUrl,
-		info: log.New(os.Stdout,
-			"[INFO] [discord-client]",
-			log.Ldate|log.Ltime),
-		error: log.New(os.Stderr,
-			"[ERROR] [discord-client]",
-			log.Ldate|log.Ltime),
+		webhookUrl: fmt.Sprintf("%s/%s", webhookBaseUrl, webhook),
+		info: infoLog,
+		error: errorLog,
 	}
 }
 
