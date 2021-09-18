@@ -1,7 +1,6 @@
 .idea/
 
-*.json
-last_tweet
-youtube_feed_entries/
+offsets.json
+config.yml
 
 dist/

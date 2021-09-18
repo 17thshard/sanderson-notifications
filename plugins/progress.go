@@ -2,13 +2,11 @@ package plugins
 
 import (
 	"17thshard.com/sanderson-notifications/common"
-	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
-	"io/ioutil"
 	"math"
 	"net/http"
-	"os"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -19,7 +17,7 @@ type ProgressPlugin struct {
 }
 
 func (plugin ProgressPlugin) Name() string {
-	return "twitter"
+	return "progress"
 }
 
 func (plugin ProgressPlugin) Validate() error {
@@ -32,6 +30,10 @@ func (plugin ProgressPlugin) Validate() error {
 	}
 
 	return nil
+}
+
+func (plugin ProgressPlugin) OffsetType() reflect.Type {
+	return reflect.TypeOf([]Progress{})
 }
 
 type Progress struct {
@@ -53,61 +55,42 @@ const (
 	blockCount = 100 / blockSize
 )
 
-func (plugin ProgressPlugin) Check(context PluginContext) error {
+func (plugin ProgressPlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Println("Checking for progress updates...")
 
 	res, err := http.Get(plugin.Url)
 	if err != nil {
-		return fmt.Errorf("could not read progress site '%s': %w", plugin.Url, err)
+		return offset, fmt.Errorf("could not read progress site '%s': %w", plugin.Url, err)
 	}
 	defer res.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		return err
+		return offset, err
 	}
 
-	oldProgress, err := readOldProgress()
-	if err != nil {
-		return err
+	var oldProgress []Progress
+	if offset != nil {
+		oldProgress = offset.([]Progress)
 	}
 
 	currentProgress, err := readProgress(doc)
 	if err != nil {
-		return err
+		return oldProgress, err
 	}
 
 	differences := diff(oldProgress, currentProgress)
 
 	if differences == nil {
 		context.Info.Println("No progress changes to report.")
-		return nil
+		return oldProgress, nil
 	}
 
 	context.Info.Println("Reporting changed progress bars...")
 
 	plugin.reportProgress(context.Discord, differences)
 
-	err = persistProgress(currentProgress)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func readOldProgress() ([]Progress, error) {
-	content, err := ioutil.ReadFile("last_progress.json")
-	if os.IsNotExist(err) {
-		content = []byte("[]")
-	}
-
-	var oldProgress []Progress
-	err = json.Unmarshal(content, &oldProgress)
-	if err != nil {
-		return nil, err
-	}
-
-	return oldProgress, nil
+	return currentProgress, nil
 }
 
 func readProgress(doc *goquery.Document) ([]Progress, error) {
@@ -209,10 +192,4 @@ func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progre
 		"dragonsteel",
 		embed,
 	)
-}
-
-func persistProgress(progress []Progress) error {
-	content, _ := json.Marshal(progress)
-
-	return ioutil.WriteFile("last_progress.json", content, 0644)
 }

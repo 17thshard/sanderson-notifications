@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -35,27 +36,32 @@ func (plugin TwitterPlugin) Validate() error {
 	return nil
 }
 
+func (plugin TwitterPlugin) OffsetType() reflect.Type {
+	return reflect.TypeOf("")
+}
+
 type Tweet struct {
 	Id              uint64
 	RetweetedStatus *Tweet `json:"retweeted_status"`
 }
 
-func (plugin TwitterPlugin) Check(context PluginContext) error {
+func (plugin TwitterPlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
+	if offset == nil {
+		return nil, fmt.Errorf("latest Tweet ID must be specified as offset for start")
+	}
+
 	context.Info.Println("Checking for new tweets...")
 
-	lastTweet, err := retrieveLastTweet()
-	if err != nil {
-		return err
-	}
+	lastTweet := offset.(string)
 
 	tweets, err := plugin.retrieveTweetsSince(lastTweet)
 	if err != nil {
-		return err
+		return lastTweet, err
 	}
 
 	if len(tweets) == 0 {
 		context.Info.Println("No tweets to report.")
-		return nil
+		return lastTweet, nil
 	}
 
 	context.Info.Printf("Reporting %d tweets...\n", len(tweets))
@@ -80,12 +86,7 @@ func (plugin TwitterPlugin) Check(context PluginContext) error {
 		)
 	}
 
-	err = ioutil.WriteFile("last_tweet", []byte(strconv.FormatUint(tweets[0].Id, 10)), 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return strconv.FormatUint(tweets[0].Id, 10), nil
 }
 
 func retrieveLastTweet() (string, error) {

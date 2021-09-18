@@ -3,11 +3,9 @@ package plugins
 import (
 	"fmt"
 	"github.com/mmcdole/gofeed/atom"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
-	"regexp"
+	"reflect"
 )
 
 type YouTubePlugin struct {
@@ -15,8 +13,6 @@ type YouTubePlugin struct {
 	Nickname  string
 	Message   string
 }
-
-const feedIdDir = "youtube_feed_entries"
 
 func (plugin YouTubePlugin) Name() string {
 	return "youtube"
@@ -34,36 +30,45 @@ func (plugin YouTubePlugin) Validate() error {
 	return nil
 }
 
+func (plugin YouTubePlugin) OffsetType() reflect.Type {
+	return reflect.TypeOf(map[string]bool{})
+}
+
 type YouTubePost struct {
 	ID    string
 	Title string
 	Link  string
 }
 
-func (plugin YouTubePlugin) Check(context PluginContext) error {
+func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Println("Checking for YouTube updates...")
 
 	res, err := http.Get(fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", url.QueryEscape(plugin.ChannelId)))
 	if err != nil {
-		return fmt.Errorf("could not read YouTube feed for channel '%s': %w", plugin.ChannelId, err)
+		return offset, fmt.Errorf("could not read YouTube feed for channel '%s': %w", plugin.ChannelId, err)
 	}
 	defer res.Body.Close()
 
 	fp := atom.Parser{}
 	atomFeed, err := fp.Parse(res.Body)
 	if err != nil {
-		return err
+		return offset, err
 	}
 
 	if len(atomFeed.Entries) == 0 {
 		context.Info.Println("No entries in YouTube feed.")
-		return nil
+		return offset, nil
+	}
+
+	handledEntries := make(map[string]bool)
+	if offset != nil {
+		handledEntries = offset.(map[string]bool)
 	}
 
 	var sortedEntries []YouTubePost
 
 	for _, entry := range atomFeed.Entries {
-		if hasHandledFeedEntryId(entry.ID) {
+		if handled, present := handledEntries[entry.ID]; present && handled {
 			continue
 		}
 
@@ -76,7 +81,7 @@ func (plugin YouTubePlugin) Check(context PluginContext) error {
 
 	if len(sortedEntries) == 0 {
 		context.Info.Println("No YouTube posts to report.")
-		return nil
+		return offset, nil
 	}
 
 	context.Info.Println("Reporting YouTube posts...")
@@ -94,39 +99,10 @@ func (plugin YouTubePlugin) Check(context PluginContext) error {
 			nil,
 		)
 
-		err = persistFeedEntryId(entry.ID)
-		if err != nil {
-			return err
-		}
+		handledEntries[entry.ID] = true
 
 		context.Info.Println("Reported YouTube post ", entry.Title)
 	}
 
-	return nil
-}
-
-func hasHandledFeedEntryId(id string) bool {
-	if _, err := os.Stat(buildFeedEntryIdPath(id)); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
-}
-
-func persistFeedEntryId(id string) error {
-	if _, err := os.Stat(feedIdDir); os.IsNotExist(err) {
-		err = os.Mkdir(feedIdDir, os.ModePerm)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return ioutil.WriteFile(buildFeedEntryIdPath(id), []byte(id), 0644)
-}
-
-func buildFeedEntryIdPath(id string) string {
-	var re = regexp.MustCompile("[^a-zA-Z0-9.\\-]")
-
-	return fmt.Sprintf("%s/%s", feedIdDir, re.ReplaceAllString(id, "_"))
+	return handledEntries, nil
 }
