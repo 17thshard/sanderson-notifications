@@ -6,7 +6,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"math"
 	"net/http"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -32,8 +31,8 @@ func (plugin ProgressPlugin) Validate() error {
 	return nil
 }
 
-func (plugin ProgressPlugin) OffsetType() reflect.Type {
-	return reflect.TypeOf([]Progress{})
+func (plugin ProgressPlugin) OffsetPrototype() interface{} {
+	return []Progress{}
 }
 
 type Progress struct {

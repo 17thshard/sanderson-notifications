@@ -3,9 +3,9 @@ package plugins
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strconv"
 	"time"
 )
@@ -37,8 +37,8 @@ func (plugin *TwitterPlugin) Validate() error {
 	return nil
 }
 
-func (plugin *TwitterPlugin) OffsetType() reflect.Type {
-	return reflect.TypeOf("")
+func (plugin *TwitterPlugin) OffsetPrototype() interface{} {
+	return ""
 }
 
 type Tweet struct {
@@ -60,6 +60,9 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	context.Info.Println("Checking for new tweets...")
 
 	lastTweet := offset.(string)
+	if len(lastTweet) == 0 {
+		return nil, fmt.Errorf("latest Tweet ID must be specified as offset for start")
+	}
 
 	tweets, err := plugin.retrieveTweetsSince(lastTweet, context)
 	if err != nil {
@@ -128,7 +131,7 @@ func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string, context Plugi
 
 	var (
 		result []Tweet
-		maxId uint64
+		maxId  uint64
 	)
 	for {
 		tweets, err := plugin.tryRead(client, context, lastTweet, maxId, 1)
@@ -147,7 +150,7 @@ func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string, context Plugi
 			}
 		}
 
-		maxId = tweets[len(tweets) - 1].Id
+		maxId = tweets[len(tweets)-1].Id
 	}
 
 	return result, nil
@@ -209,6 +212,15 @@ func (plugin *TwitterPlugin) tryRead(client *http.Client, context PluginContext,
 		time.Sleep(delay)
 
 		return plugin.tryRead(client, context, since, max, try+1)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		responseBody, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't read response body for response '%s': %w", res.Status, err)
+		}
+
+		return nil, fmt.Errorf("received response '%s', body was: %s", res.Status, string(responseBody))
 	}
 
 	var result []Tweet

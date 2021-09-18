@@ -3,7 +3,6 @@ package plugins
 import (
 	"17thshard.com/sanderson-notifications/common"
 	"log"
-	"reflect"
 )
 
 type Plugin interface {
@@ -11,7 +10,7 @@ type Plugin interface {
 
 	Validate() error
 
-	OffsetType() reflect.Type
+	OffsetPrototype() interface{}
 
 	Check(offset interface{}, ctx PluginContext) (interface{}, error)
 }

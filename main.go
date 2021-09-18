@@ -80,14 +80,15 @@ func main() {
 			var offset interface{}
 			rawOffset, ok := rawOffsets[connector.Name]
 			if ok {
-				offsetType := (*connector.Plugin).OffsetType()
-				offset = reflect.New(offsetType).Interface()
-				if err = json.Unmarshal(rawOffset, offset); err != nil {
+				offsetPrototype := (*connector.Plugin).OffsetPrototype()
+				offsetRef := reflect.New(reflect.TypeOf(offsetPrototype))
+				offsetRef.Elem().Set(reflect.ValueOf(offsetPrototype))
+				if err = json.Unmarshal(rawOffset, offsetRef.Interface()); err != nil {
 					context.Error.Printf("Could not parse offsets for connector '%s': %s", connector.Name, err)
 					erroredChannel <- nil
 					return
 				}
-				offset = reflect.ValueOf(offset).Elem().Interface()
+				offset = offsetRef.Elem().Interface()
 			}
 
 			newOffset, err := (*connector.Plugin).Check(offset, context)

@@ -5,7 +5,6 @@ import (
 	"github.com/mmcdole/gofeed/atom"
 	"net/http"
 	"net/url"
-	"reflect"
 )
 
 type YouTubePlugin struct {
@@ -30,8 +29,8 @@ func (plugin YouTubePlugin) Validate() error {
 	return nil
 }
 
-func (plugin YouTubePlugin) OffsetType() reflect.Type {
-	return reflect.TypeOf(map[string]bool{})
+func (plugin YouTubePlugin) OffsetPrototype() interface{} {
+	return map[string]bool{}
 }
 
 type YouTubePost struct {
