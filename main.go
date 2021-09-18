@@ -21,13 +21,13 @@ func main() {
 	configLoader := ConfigLoader{
 		AvailablePlugins: map[string]func() Plugin{
 			"progress": func() Plugin {
-				return ProgressPlugin{}
+				return &ProgressPlugin{}
 			},
 			"twitter": func() Plugin {
-				return TwitterPlugin{}
+				return &TwitterPlugin{}
 			},
 			"youtube": func() Plugin {
-				return YouTubePlugin{}
+				return &YouTubePlugin{}
 			},
 		},
 	}
@@ -75,7 +75,7 @@ func main() {
 			var offset interface{}
 			rawOffset, ok := rawOffsets[connector.Name]
 			if ok {
-				offsetType := connector.Plugin.OffsetType()
+				offsetType := (*connector.Plugin).OffsetType()
 				offset = reflect.New(offsetType).Interface()
 				if err = json.Unmarshal(rawOffset, offset); err != nil {
 					context.Error.Printf("Could not parse offsets for connector '%s': %s", connector.Name, err)
@@ -88,7 +88,7 @@ func main() {
 			// Store old offset, so it's not lost in case of failure
 			workingOffsets.Store(connector.Name, offset)
 
-			newOffset, err := connector.Plugin.Check(offset, context)
+			newOffset, err := (*connector.Plugin).Check(offset, context)
 			if err != nil {
 				context.Error.Printf("Check for connector '%s' failed: %s", connector.Name, err)
 				erroredChannel <- nil

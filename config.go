@@ -21,7 +21,7 @@ type Config struct {
 
 type Connector struct {
 	Name   string
-	Plugin Plugin
+	Plugin *Plugin
 }
 
 type RawConnector struct {
@@ -62,7 +62,7 @@ func (loader ConfigLoader) Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("invalid configuration for connector '%s' with plugin '%s': %w", name, rawConnector.Plugin, err)
 		}
 
-		config.Connectors = append(config.Connectors, Connector{Name: name, Plugin: plugin})
+		config.Connectors = append(config.Connectors, Connector{Name: name, Plugin: &plugin})
 	}
 
 	return &config, nil

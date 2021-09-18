@@ -3,28 +3,27 @@ package plugins
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"reflect"
 	"strconv"
-	"strings"
 )
 
 type TwitterPlugin struct {
-	Token          string
-	Account        string
-	Nickname       string
-	TweetMessage   string `yaml:"tweetMessage"`
-	RetweetMessage string `yaml:"retweetMessage"`
+	Token                   string
+	Account                 string
+	Nickname                string
+	TweetMessage            string   `mapstructure:"tweetMessage"`
+	RetweetMessage          string   `mapstructure:"retweetMessage"`
+	ExcludedRetweetAccounts []string `mapstructure:"excludeRetweetsOf"`
+	retweetExclusions       map[string]bool
 }
 
-func (plugin TwitterPlugin) Name() string {
+func (plugin *TwitterPlugin) Name() string {
 	return "twitter"
 }
 
-func (plugin TwitterPlugin) Validate() error {
+func (plugin *TwitterPlugin) Validate() error {
 	if len(plugin.Token) == 0 {
 		return fmt.Errorf("token for Twitter must not be empty")
 	}
@@ -33,19 +32,29 @@ func (plugin TwitterPlugin) Validate() error {
 		return fmt.Errorf("either an account nickname or tweet and retweet messages must be given")
 	}
 
+	plugin.retweetExclusions = make(map[string]bool)
+	for _, account := range plugin.ExcludedRetweetAccounts {
+		plugin.retweetExclusions[account] = true
+	}
+
 	return nil
 }
 
-func (plugin TwitterPlugin) OffsetType() reflect.Type {
+func (plugin *TwitterPlugin) OffsetType() reflect.Type {
 	return reflect.TypeOf("")
 }
 
 type Tweet struct {
 	Id              uint64
+	User            TweetUser
 	RetweetedStatus *Tweet `json:"retweeted_status"`
 }
 
-func (plugin TwitterPlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
+type TweetUser struct {
+	Account string `json:"screen_name"`
+}
+
+func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	if offset == nil {
 		return nil, fmt.Errorf("latest Tweet ID must be specified as offset for start")
 	}
@@ -67,11 +76,24 @@ func (plugin TwitterPlugin) Check(offset interface{}, context PluginContext) (in
 	context.Info.Printf("Reporting %d tweets...\n", len(tweets))
 
 	for i := len(tweets) - 1; i >= 0; i-- {
+		tweet := tweets[i]
+		if tweet.RetweetedStatus != nil {
+			if exclude, present := plugin.retweetExclusions[tweet.RetweetedStatus.User.Account]; present && exclude {
+				context.Info.Printf(
+					"Ignoring retweet %d from '%s', as the original tweet is from '%s'",
+					tweet.Id,
+					tweet.User.Account,
+					tweet.RetweetedStatus.User.Account,
+				)
+				continue
+			}
+		}
+
 		message := fmt.Sprintf("%s tweeted", plugin.Nickname)
 		if len(plugin.TweetMessage) > 0 {
 			message = plugin.TweetMessage
 		}
-		if tweets[i].RetweetedStatus != nil {
+		if tweet.RetweetedStatus != nil {
 			message = fmt.Sprintf("%s retweeted", plugin.Nickname)
 			if len(plugin.RetweetMessage) > 0 {
 				message = plugin.RetweetMessage
@@ -79,7 +101,7 @@ func (plugin TwitterPlugin) Check(offset interface{}, context PluginContext) (in
 		}
 
 		context.Discord.Send(
-			fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, plugin.Account, tweets[i].Id),
+			fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, plugin.Account, tweet.Id),
 			"Twitter",
 			"twitter",
 			nil,
@@ -89,23 +111,15 @@ func (plugin TwitterPlugin) Check(offset interface{}, context PluginContext) (in
 	return strconv.FormatUint(tweets[0].Id, 10), nil
 }
 
-func retrieveLastTweet() (string, error) {
-	content, err := ioutil.ReadFile("last_tweet")
-	if os.IsNotExist(err) {
-		return "", fmt.Errorf("Could not determine last reported tweet")
-	}
-
-	return strings.TrimSpace(string(content)), nil
-}
-
-func (plugin TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]Tweet, error) {
+func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]Tweet, error) {
 	client := &http.Client{}
 	timelineUrl := fmt.Sprintf(
 		"https://api.twitter.com/1.1/statuses/user_timeline.json"+
 			"?screen_name=%s"+
 			"&since_id=%s"+
 			"&exclude_replies=true"+
-			"&include_rts=true",
+			"&include_rts=true"+
+			"&count=100",
 		url.QueryEscape(plugin.Account),
 		url.QueryEscape(lastTweet),
 	)

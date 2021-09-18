@@ -9,7 +9,7 @@ import (
 )
 
 type YouTubePlugin struct {
-	ChannelId string `yaml:"channelId"`
+	ChannelId string `mapstructure:"channelId"`
 	Nickname  string
 	Message   string
 }
