@@ -11,6 +11,7 @@ import (
 )
 
 const webhookBaseUrl = "https://discord.com/api/webhooks"
+const avatarBaseUrl = "https://raw.githubusercontent.com/Palanaeum/sanderson-notifications/master/avatars"
 
 type DiscordClient struct {
 	webhookUrl string
@@ -35,7 +36,7 @@ func (discord *DiscordClient) Send(text, name, avatar string, embed interface{})
 func (discord *DiscordClient) trySend(text, name, avatar string, embed interface{}, try int) {
 	body := map[string]interface{}{
 		"username":   name,
-		"avatar_url": avatar,
+		"avatar_url": fmt.Sprintf("%s/%s.png", avatarBaseUrl, avatar),
 		"content":    text,
 	}
 

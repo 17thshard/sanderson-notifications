@@ -90,7 +90,7 @@ func (plugin YouTubePlugin) Check(context PluginContext) error {
 		context.Discord.Send(
 			fmt.Sprintf("%s %s", message, entry.Link),
 			"YouTube",
-			"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/YouTube_icon.png/640px-YouTube_icon.png",
+			"youtube",
 			nil,
 		)
 

@@ -206,7 +206,7 @@ func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progre
 	client.Send(
 		plugin.Message,
 		"Progress Updates",
-		"https://www.17thshard.com/forum/uploads/monthly_2017_12/Dragonsteelblack.png.500984e8ce0aad0dce1c7fb779b90c44.png",
+		"dragonsteel",
 		embed,
 	)
 }

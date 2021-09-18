@@ -75,7 +75,7 @@ func (plugin TwitterPlugin) Check(context PluginContext) error {
 		context.Discord.Send(
 			fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, plugin.Account, tweets[i].Id),
 			"Twitter",
-			"https://images-na.ssl-images-amazon.com/images/I/31KluT5nBkL._SY355_.png",
+			"twitter",
 			nil,
 		)
 	}
