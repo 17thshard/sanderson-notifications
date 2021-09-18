@@ -66,6 +66,11 @@ func main() {
 	erroredChannel := make(chan interface{})
 	var workingOffsets sync.Map
 
+	// Store old offsets, so they're not lost in case of failure or between config changes
+	for connector, offset := range rawOffsets {
+		workingOffsets.Store(connector, offset)
+	}
+
 	for _, connector := range config.Connectors {
 		connector := connector
 		connectorInfo, connectorError := CreateLoggers(fmt.Sprintf("connector=%s", connector.Name))
@@ -84,9 +89,6 @@ func main() {
 				}
 				offset = reflect.ValueOf(offset).Elem().Interface()
 			}
-
-			// Store old offset, so it's not lost in case of failure
-			workingOffsets.Store(connector.Name, offset)
 
 			newOffset, err := (*connector.Plugin).Check(offset, context)
 			if err != nil {
