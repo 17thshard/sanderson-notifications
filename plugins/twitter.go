@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 type TwitterPlugin struct {
@@ -60,7 +61,7 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 
 	lastTweet := offset.(string)
 
-	tweets, err := plugin.retrieveTweetsSince(lastTweet)
+	tweets, err := plugin.retrieveTweetsSince(lastTweet, context)
 	if err != nil {
 		return lastTweet, err
 	}
@@ -122,38 +123,98 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	return lastTweet, nil
 }
 
-func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]Tweet, error) {
+func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string, context PluginContext) ([]Tweet, error) {
 	client := &http.Client{}
+
+	var (
+		result []Tweet
+		maxId uint64
+	)
+	for {
+		tweets, err := plugin.tryRead(client, context, lastTweet, maxId, 1)
+		if err != nil {
+			return nil, fmt.Errorf("could not read tweets: %w", err)
+		}
+
+		// Max ID is inclusive, so we can't rely on receiving an empty result
+		if len(tweets) == 0 || (len(tweets) == 1 && tweets[0].Id == maxId) {
+			break
+		}
+
+		for _, tweet := range tweets {
+			if tweet.Id != maxId {
+				result = append(result, tweet)
+			}
+		}
+
+		maxId = tweets[len(tweets) - 1].Id
+	}
+
+	return result, nil
+}
+
+const maxRetries = 3
+
+func (plugin *TwitterPlugin) tryRead(client *http.Client, context PluginContext, since string, max uint64, try int) ([]Tweet, error) {
 	timelineUrl := fmt.Sprintf(
 		"https://api.twitter.com/1.1/statuses/user_timeline.json"+
 			"?screen_name=%s"+
 			"&since_id=%s"+
+			"&count=100"+
 			"&exclude_replies=true"+
-			"&include_rts=true"+
-			"&count=100",
+			"&include_rts=true",
 		url.QueryEscape(plugin.Account),
-		url.QueryEscape(lastTweet),
+		url.QueryEscape(since),
 	)
 
-	req, err := http.NewRequest("GET", timelineUrl, nil)
+	if max != 0 {
+		timelineUrl += fmt.Sprintf("&max_id=%s", url.QueryEscape(strconv.FormatUint(max, 10)))
+	}
 
+	req, err := http.NewRequest("GET", timelineUrl, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get tweets")
+		return nil, fmt.Errorf("could not build tweets request: %w", err)
 	}
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", plugin.Token))
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Could not get tweets: ", err.Error())
+		return nil, fmt.Errorf("couldn't request tweets: %w", err)
 	}
 
 	defer res.Body.Close()
 
+	if res.StatusCode == http.StatusTooManyRequests {
+		if try == maxRetries {
+			return nil, fmt.Errorf("rate limiting still applied after %d retries", maxRetries)
+		}
+
+		if res.Header.Get("X-App-Rate-Limit-Remaining") == "0" {
+			return nil, fmt.Errorf("app rate limit hit for current 24h period")
+		}
+
+		rawLimitResetTime := res.Header.Get("X-Rate-Limit-Reset")
+		if rawLimitResetTime == "" {
+			return nil, fmt.Errorf("no rate limit reset time found")
+		}
+
+		limitResetTimeValue, err := strconv.ParseInt(rawLimitResetTime, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("rate limit '%s' could not be parsed into number: %w", rawLimitResetTime, err)
+		}
+
+		delay := time.Unix(limitResetTimeValue, 0).Sub(time.Now())
+
+		context.Info.Printf("Being rate late limited by Twitter, waiting for %ds\n", delay)
+		time.Sleep(delay)
+
+		return plugin.tryRead(client, context, since, max, try+1)
+	}
+
 	var result []Tweet
 	err = json.NewDecoder(res.Body).Decode(&result)
-
 	if err != nil {
-		return nil, fmt.Errorf("Could not read tweets: ", err.Error())
+		return nil, fmt.Errorf("couldn't parse tweets: %w", err)
 	}
 
 	return result, nil
