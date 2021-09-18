@@ -91,6 +91,7 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 					tweet.User.Account,
 					tweet.RetweetedStatus.User.Account,
 				)
+				lastTweet = strconv.FormatUint(tweet.Id, 10)
 				continue
 			}
 		}
@@ -106,15 +107,19 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 			}
 		}
 
-		context.Discord.Send(
+		if err = context.Discord.Send(
 			fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, plugin.Account, tweet.Id),
 			"Twitter",
 			"twitter",
 			nil,
-		)
+		); err != nil {
+			return lastTweet, err
+		}
+
+		lastTweet = strconv.FormatUint(tweet.Id, 10)
 	}
 
-	return strconv.FormatUint(tweets[0].Id, 10), nil
+	return lastTweet, nil
 }
 
 func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]Tweet, error) {

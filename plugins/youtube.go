@@ -101,12 +101,14 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 			message = plugin.Message
 		}
 
-		context.Discord.Send(
+		if err = context.Discord.Send(
 			fmt.Sprintf("%s %s", message, entry.Link),
 			"YouTube",
 			"youtube",
 			nil,
-		)
+		); err != nil {
+			return handledEntries, err
+		}
 
 		handledEntries[entry.ID] = true
 

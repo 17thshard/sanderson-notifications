@@ -88,7 +88,9 @@ func (plugin ProgressPlugin) Check(offset interface{}, context PluginContext) (i
 
 	context.Info.Println("Reporting changed progress bars...")
 
-	plugin.reportProgress(context.Discord, differences)
+	if err = plugin.reportProgress(context.Discord, differences); err != nil {
+		return oldProgress, err
+	}
 
 	return currentProgress, nil
 }
@@ -152,7 +154,7 @@ func diff(old, new []Progress) []ProgressDiff {
 	return result
 }
 
-func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) {
+func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) error {
 	var embedBuilder strings.Builder
 
 	for i, progress := range progressBars {
@@ -186,7 +188,7 @@ func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progre
 		},
 	}
 
-	client.Send(
+	return client.Send(
 		plugin.Message,
 		"Progress Updates",
 		"dragonsteel",
