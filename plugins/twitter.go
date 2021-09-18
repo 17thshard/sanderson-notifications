@@ -28,10 +28,6 @@ func (plugin *TwitterPlugin) Validate() error {
 		return fmt.Errorf("token for Twitter must not be empty")
 	}
 
-	if len(plugin.Nickname) == 0 && (len(plugin.TweetMessage) == 0 || len(plugin.TweetMessage) == 0) {
-		return fmt.Errorf("either an account nickname or tweet and retweet messages must be given")
-	}
-
 	plugin.retweetExclusions = make(map[string]bool)
 	for _, account := range plugin.ExcludedRetweetAccounts {
 		plugin.retweetExclusions[account] = true
@@ -51,6 +47,7 @@ type Tweet struct {
 }
 
 type TweetUser struct {
+	Name    string
 	Account string `json:"screen_name"`
 }
 
@@ -74,6 +71,15 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	}
 
 	context.Info.Printf("Reporting %d tweets...\n", len(tweets))
+
+	if len(plugin.Nickname) == 0 && (len(plugin.TweetMessage) == 0 || len(plugin.RetweetMessage) == 0) {
+		plugin.Nickname = tweets[0].User.Name
+		context.Info.Printf(
+			"No nickname or specific messages were provided for account '%s', using name '%s' as fallback nickname",
+			plugin.Account,
+			plugin.Nickname,
+		)
+	}
 
 	for i := len(tweets) - 1; i >= 0; i-- {
 		tweet := tweets[i]

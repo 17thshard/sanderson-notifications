@@ -86,6 +86,15 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 
 	context.Info.Println("Reporting YouTube posts...")
 
+	if len(plugin.Nickname) == 0 && len(plugin.Message) == 0 {
+		plugin.Nickname = atomFeed.Title
+		context.Info.Printf(
+			"No nickname or specific messages were provided for channel '%s', using feed title '%s' as fallback nickname",
+			plugin.ChannelId,
+			plugin.Nickname,
+		)
+	}
+
 	for _, entry := range sortedEntries {
 		message := fmt.Sprintf("%s posted something on YouTube", plugin.Nickname)
 		if len(plugin.Message) > 0 {
