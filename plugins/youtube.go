@@ -48,6 +48,15 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode == 404 {
+		logLevel := context.Info
+		if offset == nil {
+			logLevel = context.Error
+		}
+		logLevel.Printf("Could not find feed for channel ID '%s'. YouTube API might be down.", plugin.ChannelId)
+		return offset, nil
+	}
+
 	fp := atom.Parser{}
 	atomFeed, err := fp.Parse(res.Body)
 	if err != nil {
