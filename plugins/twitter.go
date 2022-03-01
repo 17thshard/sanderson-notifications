@@ -164,7 +164,7 @@ func (plugin *TwitterPlugin) tryRead(client *http.Client, context PluginContext,
 			"?screen_name=%s"+
 			"&since_id=%s"+
 			"&count=100"+
-			"&exclude_replies=true"+
+			"&exclude_replies=false"+
 			"&include_rts=true",
 		url.QueryEscape(plugin.Account),
 		url.QueryEscape(since),
