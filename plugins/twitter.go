@@ -44,7 +44,8 @@ func (plugin *TwitterPlugin) OffsetPrototype() interface{} {
 type Tweet struct {
 	Id              uint64
 	User            TweetUser
-	RetweetedStatus *Tweet `json:"retweeted_status"`
+	RetweetedStatus *Tweet  `json:"retweeted_status"`
+	ReplyToUsername *string `json:"in_reply_to_screen_name"`
 }
 
 type TweetUser struct {
@@ -98,6 +99,16 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 				lastTweet = strconv.FormatUint(tweet.Id, 10)
 				continue
 			}
+		}
+
+		if tweet.ReplyToUsername != nil && *tweet.ReplyToUsername != plugin.Account {
+			context.Info.Printf(
+				"Ignoring reply tweet %d from '%s', as it is not in response to themself",
+				tweet.Id,
+				tweet.User.Account,
+			)
+			lastTweet = strconv.FormatUint(tweet.Id, 10)
+			continue
 		}
 
 		message := fmt.Sprintf("%s tweeted", plugin.Nickname)
