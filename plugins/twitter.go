@@ -111,19 +111,31 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 			continue
 		}
 
+		messageTweet := tweet
 		message := fmt.Sprintf("%s tweeted", plugin.Nickname)
 		if len(plugin.TweetMessage) > 0 {
 			message = plugin.TweetMessage
 		}
 		if tweet.RetweetedStatus != nil {
+			messageTweet = *tweet.RetweetedStatus
 			message = fmt.Sprintf("%s retweeted", plugin.Nickname)
 			if len(plugin.RetweetMessage) > 0 {
 				message = plugin.RetweetMessage
 			}
 		}
 
+		text := fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, messageTweet.User.Account, messageTweet.Id)
+		if tweet.RetweetedStatus != nil {
+			text = fmt.Sprintf(
+				"%s (https://twitter.com/%s/status/%d)",
+				text,
+				tweet.User.Account,
+				tweet.Id,
+			)
+		}
+
 		if err = context.Discord.Send(
-			fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, plugin.Account, tweet.Id),
+			text,
 			"Twitter",
 			"twitter",
 			nil,
