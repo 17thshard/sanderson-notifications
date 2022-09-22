@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"17thshard.com/sanderson-notifications/common"
+	"context"
 	"log"
 )
 
@@ -19,4 +20,5 @@ type PluginContext struct {
 	Discord *common.DiscordClient
 	Info    *log.Logger
 	Error   *log.Logger
+	Context *context.Context
 }

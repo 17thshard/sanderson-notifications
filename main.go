@@ -3,6 +3,7 @@ package main
 import (
 	. "17thshard.com/sanderson-notifications/common"
 	. "17thshard.com/sanderson-notifications/plugins"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -53,13 +54,14 @@ func main() {
 	}
 
 	var rawOffsets map[string]json.RawMessage
-	if err = json.Unmarshal(offsetContent, &rawOffsets); err !=  nil {
+	if err = json.Unmarshal(offsetContent, &rawOffsets); err != nil {
 		errorLog.Fatalf("Failed to parse offsets: %s", err)
 	}
 
 	infoLog.Println("Checking for updates...")
 
 	client := CreateDiscordClient(config.DiscordWebhook)
+	ctx := context.Background()
 
 	var wg sync.WaitGroup
 	wg.Add(len(config.Connectors))
@@ -74,7 +76,7 @@ func main() {
 	for _, connector := range config.Connectors {
 		connector := connector
 		connectorInfo, connectorError := CreateLoggers(fmt.Sprintf("connector=%s", connector.Name))
-		context := PluginContext{Discord: &client, Info: connectorInfo, Error: connectorError}
+		pluginContext := PluginContext{Discord: &client, Info: connectorInfo, Error: connectorError, Context: &ctx}
 		go func() {
 			defer wg.Done()
 			var offset interface{}
@@ -84,16 +86,16 @@ func main() {
 				offsetRef := reflect.New(reflect.TypeOf(offsetPrototype))
 				offsetRef.Elem().Set(reflect.ValueOf(offsetPrototype))
 				if err = json.Unmarshal(rawOffset, offsetRef.Interface()); err != nil {
-					context.Error.Printf("Could not parse offsets for connector '%s': %s", connector.Name, err)
+					pluginContext.Error.Printf("Could not parse offsets for connector '%s': %s", connector.Name, err)
 					erroredChannel <- nil
 					return
 				}
 				offset = offsetRef.Elem().Interface()
 			}
 
-			newOffset, err := (*connector.Plugin).Check(offset, context)
+			newOffset, err := (*connector.Plugin).Check(offset, pluginContext)
 			if err != nil {
-				context.Error.Printf("Check for connector '%s' failed: %s", connector.Name, err)
+				pluginContext.Error.Printf("Check for connector '%s' failed: %s", connector.Name, err)
 				erroredChannel <- nil
 			}
 			workingOffsets.Store(connector.Name, newOffset)
@@ -115,7 +117,7 @@ func main() {
 
 	infoLog.Println("Storing new offsets...")
 	newOffsets := make(map[string]interface{})
-	workingOffsets.Range(func( k interface{}, v interface{}) bool {
+	workingOffsets.Range(func(k interface{}, v interface{}) bool {
 		newOffsets[k.(string)] = v
 		return true
 	})

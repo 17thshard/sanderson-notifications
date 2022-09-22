@@ -3,14 +3,19 @@ package plugins
 import (
 	"fmt"
 	"github.com/mmcdole/gofeed/atom"
+	"google.golang.org/api/option"
+	"google.golang.org/api/youtube/v3"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type YouTubePlugin struct {
-	ChannelId string `mapstructure:"channelId"`
-	Nickname  string
-	Message   string
+	ChannelId         string `mapstructure:"channelId"`
+	Nickname          string
+	Message           string
+	LivestreamMessage string
+	Token             string
 }
 
 func (plugin YouTubePlugin) Name() string {
@@ -34,9 +39,10 @@ func (plugin YouTubePlugin) OffsetPrototype() interface{} {
 }
 
 type YouTubePost struct {
-	ID    string
-	Title string
-	Link  string
+	ID      string
+	Title   string
+	Link    string
+	VideoID string
 }
 
 func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
@@ -68,6 +74,8 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 		return offset, nil
 	}
 
+	youtubeService, err := youtube.NewService(*context.Context, option.WithAPIKey(plugin.Token))
+
 	handledEntries := make(map[string]bool)
 	if offset != nil {
 		handledEntries = offset.(map[string]bool)
@@ -80,10 +88,16 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 			continue
 		}
 
+		videoId := ""
+		if len(entry.Extensions["yt"]["videoId"]) > 0 {
+			videoId = entry.Extensions["yt"]["videoId"][0].Value
+		}
+
 		sortedEntries = append([]YouTubePost{{
-			ID:    entry.ID,
-			Title: entry.Title,
-			Link:  entry.Links[0].Href,
+			ID:      entry.ID,
+			Title:   entry.Title,
+			Link:    entry.Links[0].Href,
+			VideoID: videoId,
 		}}, sortedEntries...)
 	}
 
@@ -109,6 +123,15 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 			message = plugin.Message
 		}
 
+		liveStreamMessage, err := plugin.getLiveStreamMessage(entry, youtubeService, context)
+		if err != nil {
+			return nil, err
+		}
+
+		if liveStreamMessage != nil {
+			message = *liveStreamMessage
+		}
+
 		if err = context.Discord.Send(
 			fmt.Sprintf("%s %s", message, entry.Link),
 			"YouTube",
@@ -124,4 +147,38 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 	}
 
 	return handledEntries, nil
+}
+
+func (plugin YouTubePlugin) getLiveStreamMessage(entry YouTubePost, youtubeService *youtube.Service, context PluginContext) (*string, error) {
+	if entry.VideoID == "" {
+		return nil, nil
+	}
+
+	videoList, err := youtubeService.Videos.List([]string{"liveStreamingDetails"}).Id(entry.VideoID).Do()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(videoList.Items) == 0 {
+		return nil, nil
+	}
+
+	video := videoList.Items[0]
+	if video.LiveStreamingDetails == nil {
+		return nil, nil
+	}
+
+	template := fmt.Sprintf("%s is going live on YouTube %%s!", plugin.Nickname)
+	if len(plugin.Message) > 0 {
+		template = plugin.Message
+	}
+
+	parsedStart, err := time.Parse(time.RFC3339, video.LiveStreamingDetails.ScheduledStartTime)
+	if err != nil {
+		return nil, nil
+	}
+
+	result := fmt.Sprintf(template, fmt.Sprintf("<t:%d:R>", parsedStart.Unix()))
+	return &result, nil
 }
