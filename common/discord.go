@@ -70,8 +70,8 @@ func (discord *DiscordClient) trySend(text, name, avatar string, embed interface
 			return fmt.Errorf("could not parse Discord response: %w", err)
 		}
 
-		discord.info.Printf("Being rate late limited by Discord, waiting for %dms\n", data.Delay)
-		time.Sleep(time.Duration(data.Delay) * time.Millisecond)
+		discord.info.Printf("Being rate late limited by Discord, waiting for %fs\n", data.Delay)
+		time.Sleep(time.Duration(data.Delay * float32(time.Second)))
 
 		return discord.trySend(text, name, avatar, embed, try+1)
 	}
@@ -84,5 +84,5 @@ func (discord *DiscordClient) trySend(text, name, avatar string, embed interface
 }
 
 type RateLimitResponse struct {
-	Delay int `json:"retry_after"`
+	Delay float32 `json:"retry_after"`
 }
