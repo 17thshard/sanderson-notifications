@@ -11,11 +11,10 @@ import (
 )
 
 type YouTubePlugin struct {
-	ChannelId         string `mapstructure:"channelId"`
-	Nickname          string
-	Message           string
-	LivestreamMessage string
-	Token             string
+	ChannelId string `mapstructure:"channelId"`
+	Nickname  string
+	Messages  map[string]string
+	Token     string
 }
 
 func (plugin YouTubePlugin) Name() string {
@@ -27,7 +26,7 @@ func (plugin YouTubePlugin) Validate() error {
 		return fmt.Errorf("channel ID for YouTube must not be empty")
 	}
 
-	if len(plugin.Nickname) == 0 && len(plugin.Message) == 0 {
+	if len(plugin.Nickname) == 0 && len(plugin.Messages) == 0 {
 		return fmt.Errorf("either a channel nickname or a YouTube post message must be given")
 	}
 
@@ -108,7 +107,7 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 
 	context.Info.Println("Reporting YouTube posts...")
 
-	if len(plugin.Nickname) == 0 && len(plugin.Message) == 0 {
+	if len(plugin.Nickname) == 0 && len(plugin.Messages) == 0 {
 		plugin.Nickname = atomFeed.Title
 		context.Info.Printf(
 			"No nickname or specific messages were provided for channel '%s', using feed title '%s' as fallback nickname",
@@ -119,17 +118,26 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 
 	for _, entry := range sortedEntries {
 		message := fmt.Sprintf("%s posted something on YouTube", plugin.Nickname)
-		if len(plugin.Message) > 0 {
-			message = plugin.Message
+		if configMessage, exists := plugin.Messages["video"]; exists {
+			message = configMessage
 		}
 
-		liveStreamMessage, err := plugin.getLiveStreamMessage(entry, youtubeService, context)
+		shortMessage, err := plugin.getShortMessage(entry)
 		if err != nil {
 			return nil, err
 		}
 
-		if liveStreamMessage != nil {
-			message = *liveStreamMessage
+		if shortMessage != nil {
+			message = *shortMessage
+		}
+
+		liveEventMessage, err := plugin.getLiveEventMessage(entry, youtubeService, context)
+		if err != nil {
+			return nil, err
+		}
+
+		if liveEventMessage != nil {
+			message = *liveEventMessage
 		}
 
 		if err = context.Discord.Send(
@@ -149,12 +157,12 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 	return handledEntries, nil
 }
 
-func (plugin YouTubePlugin) getLiveStreamMessage(entry YouTubePost, youtubeService *youtube.Service, context PluginContext) (*string, error) {
+func (plugin YouTubePlugin) getLiveEventMessage(entry YouTubePost, youtubeService *youtube.Service, context PluginContext) (*string, error) {
 	if entry.VideoID == "" {
 		return nil, nil
 	}
 
-	videoList, err := youtubeService.Videos.List([]string{"liveStreamingDetails"}).Id(entry.VideoID).Do()
+	videoList, err := youtubeService.Videos.List([]string{"liveStreamingDetails", "status"}).Id(entry.VideoID).Do()
 
 	if err != nil {
 		return nil, err
@@ -169,16 +177,50 @@ func (plugin YouTubePlugin) getLiveStreamMessage(entry YouTubePost, youtubeServi
 		return nil, nil
 	}
 
-	template := fmt.Sprintf("%s is going live on YouTube %%s!", plugin.Nickname)
-	if len(plugin.Message) > 0 {
-		template = plugin.Message
-	}
-
 	parsedStart, err := time.Parse(time.RFC3339, video.LiveStreamingDetails.ScheduledStartTime)
 	if err != nil {
 		return nil, nil
 	}
 
+	// Treat past live events as regular videos
+	if parsedStart.Before(time.Now()) {
+		return nil, nil
+	}
+
+	videoType := "livestream"
+	template := fmt.Sprintf("%s is going live on YouTube %%s!", plugin.Nickname)
+	if video.Status.UploadStatus == "processed" {
+		videoType = "premiere"
+		template = fmt.Sprintf("%s will premiere a video on YouTube %%s!", plugin.Nickname)
+	}
+
+	if configMessage, exists := plugin.Messages[videoType]; exists {
+		template = configMessage
+	}
+
 	result := fmt.Sprintf(template, fmt.Sprintf("<t:%d:R>", parsedStart.Unix()))
 	return &result, nil
+}
+
+func (plugin YouTubePlugin) getShortMessage(entry YouTubePost) (*string, error) {
+	if entry.VideoID == "" {
+		return nil, nil
+	}
+
+	response, err := http.Head(fmt.Sprintf("https://youtube.com/shorts/%s", entry.VideoID))
+
+	if err != nil {
+		return nil, err
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+
+	message := fmt.Sprintf("%s posted a short on YouTube!", plugin.Nickname)
+	if configMessage, exists := plugin.Messages["short"]; exists {
+		message = configMessage
+	}
+
+	return &message, nil
 }
