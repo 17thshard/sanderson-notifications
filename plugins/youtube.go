@@ -15,6 +15,7 @@ type YouTubePlugin struct {
 	Nickname  string
 	Messages  map[string]string
 	Token     string
+	client    *http.Client
 }
 
 func (plugin YouTubePlugin) Name() string {
@@ -47,7 +48,13 @@ type YouTubePost struct {
 func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Println("Checking for YouTube updates...")
 
-	res, err := http.Get(fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", url.QueryEscape(plugin.ChannelId)))
+	plugin.client = &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	res, err := plugin.client.Get(fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", url.QueryEscape(plugin.ChannelId)))
 	if err != nil {
 		return offset, fmt.Errorf("could not read YouTube feed for channel '%s': %w", plugin.ChannelId, err)
 	}
@@ -207,7 +214,7 @@ func (plugin YouTubePlugin) getShortMessage(entry YouTubePost) (*string, error) 
 		return nil, nil
 	}
 
-	response, err := http.Head(fmt.Sprintf("https://youtube.com/shorts/%s", entry.VideoID))
+	response, err := plugin.client.Head(fmt.Sprintf("https://youtube.com/shorts/%s", entry.VideoID))
 
 	if err != nil {
 		return nil, err
