@@ -152,7 +152,7 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]twitterscraper.Tweet, error) {
 	var result []twitterscraper.Tweet
 
-	for tweet := range plugin.scraper.GetTweets(goContext.Background(), plugin.Account, 1000) {
+	for tweet := range plugin.scraper.GetTweets(goContext.Background(), plugin.Account, 3200) {
 		if tweet.ID == lastTweet {
 			break
 		}

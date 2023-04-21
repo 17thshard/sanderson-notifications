@@ -26,8 +26,6 @@ The basic structure of a config file is as follows
 ```yaml
 discordWebhook: '<webhook-id>'
 shared:
-  twitter:
-    token: '<twitter-auth-token>'
   progress:
     url: https://brandon-sanderson.com
 connectors:
@@ -154,21 +152,19 @@ If you want all tweets for an account to be posted, simply use the first tweet's
 #### Configuration
 The YAML structure for this plugin's configuration is as follows:
 ```yaml
-token: accessToken
 account: BrandSanderson
 nickname: Brandon
 tweetMessage: Brandon tweeted
 retweetMessage: Brandon retweeted
 excludeRetweetsOf: ['DragonsteelBook']
 ```
-| Field               | Mandatory | Description                                                                                                |
-|---------------------|:---------:|------------------------------------------------------------------------------------------------------------|
-| `token`             |     ✔️     | A Twitter API Bearer token, can be created on [Twitter's developer portal](https://developer.twitter.com/) |
-| `account`           |     ✔️     | Twitter handle (without `@`) for account to check tweets for                                               |
-| `nickname`          |     ❌    | Nickname for the Twitter account to use in Discord messages                                                |
-| `tweetMessage`      |     ❌    | Custom message to display for new tweets                                                                   |
-| `retweetMessage`    |     ❌    | Custom message to display for new retweets                                                                 |
-| `excludeRetweetsOf` |     ❌    | List of Twitter handles (without `@`) for which retweets should *not* be posted                            |
+| Field               | Mandatory | Description                                                                     |
+|---------------------|:---------:|---------------------------------------------------------------------------------|
+| `account`           |     ✔️    | Twitter handle (without `@`) for account to check tweets for                    |
+| `nickname`          |     ❌    | Nickname for the Twitter account to use in Discord messages                     |
+| `tweetMessage`      |     ❌    | Custom message to display for new tweets                                        |
+| `retweetMessage`    |     ❌    | Custom message to display for new retweets                                      |
+| `excludeRetweetsOf` |     ❌    | List of Twitter handles (without `@`) for which retweets should *not* be posted |
 
 If `nickname` and `tweetMessage` as well as `retweetMessage` are all omitted,
 the Twitter display name for the account will be used in a standard message.
