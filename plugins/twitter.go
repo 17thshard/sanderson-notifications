@@ -1,23 +1,19 @@
 package plugins
 
 import (
-	"encoding/json"
+	goContext "context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strconv"
-	"time"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 )
 
 type TwitterPlugin struct {
-	Token                   string
 	Account                 string
 	Nickname                string
 	TweetMessage            string   `mapstructure:"tweetMessage"`
 	RetweetMessage          string   `mapstructure:"retweetMessage"`
 	ExcludedRetweetAccounts []string `mapstructure:"excludeRetweetsOf"`
 	retweetExclusions       map[string]bool
+	scraper                 *twitterscraper.Scraper
 }
 
 func (plugin *TwitterPlugin) Name() string {
@@ -25,10 +21,6 @@ func (plugin *TwitterPlugin) Name() string {
 }
 
 func (plugin *TwitterPlugin) Validate() error {
-	if len(plugin.Token) == 0 {
-		return fmt.Errorf("token for Twitter must not be empty")
-	}
-
 	plugin.retweetExclusions = make(map[string]bool)
 	for _, account := range plugin.ExcludedRetweetAccounts {
 		plugin.retweetExclusions[account] = true
@@ -65,7 +57,9 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 		return nil, fmt.Errorf("latest Tweet ID must be specified as offset for start")
 	}
 
-	tweets, err := plugin.retrieveTweetsSince(lastTweet, context)
+	plugin.scraper = twitterscraper.New().WithReplies(true)
+
+	tweets, err := plugin.retrieveTweetsSince(lastTweet)
 	if err != nil {
 		return lastTweet, err
 	}
@@ -78,7 +72,13 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	context.Info.Printf("Reporting %d tweets...\n", len(tweets))
 
 	if len(plugin.Nickname) == 0 && (len(plugin.TweetMessage) == 0 || len(plugin.RetweetMessage) == 0) {
-		plugin.Nickname = tweets[0].User.Name
+		profile, err := plugin.scraper.GetProfile(plugin.Account)
+
+		if err != nil {
+			return lastTweet, err
+		}
+
+		plugin.Nickname = profile.Name
 		context.Info.Printf(
 			"No nickname or specific messages were provided for account '%s', using name '%s' as fallback nickname",
 			plugin.Account,
@@ -89,25 +89,25 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	for i := len(tweets) - 1; i >= 0; i-- {
 		tweet := tweets[i]
 		if tweet.RetweetedStatus != nil {
-			if exclude, present := plugin.retweetExclusions[tweet.RetweetedStatus.User.Account]; present && exclude {
+			if exclude, present := plugin.retweetExclusions[tweet.RetweetedStatus.Username]; present && exclude {
 				context.Info.Printf(
-					"Ignoring retweet %d from '%s', as the original tweet is from '%s'",
-					tweet.Id,
-					tweet.User.Account,
-					tweet.RetweetedStatus.User.Account,
+					"Ignoring retweet %s from '%s', as the original tweet is from '%s'",
+					tweet.ID,
+					tweet.Username,
+					tweet.RetweetedStatus.Username,
 				)
-				lastTweet = strconv.FormatUint(tweet.Id, 10)
+				lastTweet = tweet.ID
 				continue
 			}
 		}
 
-		if tweet.ReplyToUsername != nil && *tweet.ReplyToUsername != plugin.Account {
+		if tweet.IsReply && (tweet.InReplyToStatus == nil || tweet.InReplyToStatus.Username != plugin.Account) {
 			context.Info.Printf(
-				"Ignoring reply tweet %d from '%s', as it is not in response to themself",
-				tweet.Id,
-				tweet.User.Account,
+				"Ignoring reply tweet %s from '%s', as it is not in response to themself",
+				tweet.ID,
+				tweet.Username,
 			)
-			lastTweet = strconv.FormatUint(tweet.Id, 10)
+			lastTweet = tweet.ID
 			continue
 		}
 
@@ -124,13 +124,13 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 			}
 		}
 
-		text := fmt.Sprintf("%s https://twitter.com/%s/status/%d", message, messageTweet.User.Account, messageTweet.Id)
+		text := fmt.Sprintf("%s https://twitter.com/%s/status/%s", message, messageTweet.Username, messageTweet.ID)
 		if tweet.RetweetedStatus != nil {
 			text = fmt.Sprintf(
-				"%s (https://twitter.com/%s/status/%d)",
+				"%s (https://twitter.com/%s/status/%s)",
 				text,
-				tweet.User.Account,
-				tweet.Id,
+				tweet.Username,
+				tweet.ID,
 			)
 		}
 
@@ -143,113 +143,25 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 			return lastTweet, err
 		}
 
-		lastTweet = strconv.FormatUint(tweet.Id, 10)
+		lastTweet = tweet.ID
 	}
 
 	return lastTweet, nil
 }
 
-func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string, context PluginContext) ([]Tweet, error) {
-	client := &http.Client{}
+func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]twitterscraper.Tweet, error) {
+	var result []twitterscraper.Tweet
 
-	var (
-		result []Tweet
-		maxId  uint64
-	)
-	for {
-		tweets, err := plugin.tryRead(client, context, lastTweet, maxId, 1)
-		if err != nil {
-			return nil, fmt.Errorf("could not read tweets: %w", err)
-		}
-
-		// Max ID is inclusive, so we can't rely on receiving an empty result
-		if len(tweets) == 0 || (len(tweets) == 1 && tweets[0].Id == maxId) {
+	for tweet := range plugin.scraper.GetTweets(goContext.Background(), plugin.Account, 1000) {
+		if tweet.ID == lastTweet {
 			break
 		}
 
-		for _, tweet := range tweets {
-			if tweet.Id != maxId {
-				result = append(result, tweet)
-			}
+		if tweet.Error != nil {
+			return nil, fmt.Errorf("could not read tweets: %w", tweet.Error)
 		}
 
-		maxId = tweets[len(tweets)-1].Id
-	}
-
-	return result, nil
-}
-
-const maxRetries = 3
-
-func (plugin *TwitterPlugin) tryRead(client *http.Client, context PluginContext, since string, max uint64, try int) ([]Tweet, error) {
-	timelineUrl := fmt.Sprintf(
-		"https://api.twitter.com/1.1/statuses/user_timeline.json"+
-			"?screen_name=%s"+
-			"&since_id=%s"+
-			"&count=100"+
-			"&exclude_replies=false"+
-			"&include_rts=true",
-		url.QueryEscape(plugin.Account),
-		url.QueryEscape(since),
-	)
-
-	if max != 0 {
-		timelineUrl += fmt.Sprintf("&max_id=%s", url.QueryEscape(strconv.FormatUint(max, 10)))
-	}
-
-	req, err := http.NewRequest("GET", timelineUrl, nil)
-	if err != nil {
-		return nil, fmt.Errorf("could not build tweets request: %w", err)
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", plugin.Token))
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't request tweets: %w", err)
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusTooManyRequests {
-		if try == maxRetries {
-			return nil, fmt.Errorf("rate limiting still applied after %d retries", maxRetries)
-		}
-
-		if res.Header.Get("X-App-Rate-Limit-Remaining") == "0" {
-			return nil, fmt.Errorf("app rate limit hit for current 24h period")
-		}
-
-		rawLimitResetTime := res.Header.Get("X-Rate-Limit-Reset")
-		if rawLimitResetTime == "" {
-			return nil, fmt.Errorf("no rate limit reset time found")
-		}
-
-		limitResetTimeValue, err := strconv.ParseInt(rawLimitResetTime, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("rate limit '%s' could not be parsed into number: %w", rawLimitResetTime, err)
-		}
-
-		delay := time.Unix(limitResetTimeValue, 0).Sub(time.Now())
-
-		context.Info.Printf("Being rate late limited by Twitter, waiting for %ds\n", delay)
-		time.Sleep(delay)
-
-		return plugin.tryRead(client, context, since, max, try+1)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		responseBody, err := io.ReadAll(res.Body)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't read response body for response '%s': %w", res.Status, err)
-		}
-
-		return nil, fmt.Errorf("received response '%s', body was: %s", res.Status, string(responseBody))
-	}
-
-	var result []Tweet
-	err = json.NewDecoder(res.Body).Decode(&result)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't parse tweets: %w", err)
+		result = append(result, tweet.Tweet)
 	}
 
 	return result, nil
