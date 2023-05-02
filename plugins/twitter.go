@@ -159,6 +159,10 @@ func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet uint64) ([]twitterscr
 	var result []twitterscraper.Tweet
 
 	for tweet := range plugin.scraper.GetTweets(goContext.Background(), plugin.Account, 3200) {
+		if tweet.Error != nil {
+			return nil, fmt.Errorf("could not read tweets: %w", tweet.Error)
+		}
+
 		sortableId, err := strconv.ParseUint(tweet.ID, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("tweet ID '%s' is not valid snowflake: %w", tweet.ID, err)
@@ -166,10 +170,6 @@ func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet uint64) ([]twitterscr
 
 		if sortableId <= lastTweet {
 			break
-		}
-
-		if tweet.Error != nil {
-			return nil, fmt.Errorf("could not read tweets: %w", tweet.Error)
 		}
 
 		result = append(result, tweet.Tweet)
