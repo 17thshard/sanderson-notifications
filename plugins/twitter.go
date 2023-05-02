@@ -4,6 +4,7 @@ import (
 	goContext "context"
 	"fmt"
 	twitterscraper "github.com/n0madic/twitter-scraper"
+	"strconv"
 )
 
 type TwitterPlugin struct {
@@ -57,9 +58,14 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 		return nil, fmt.Errorf("latest Tweet ID must be specified as offset for start")
 	}
 
+	sortableLastTweet, err := strconv.ParseUint(lastTweet, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("latest Tweet ID '%s' is not valid snowflake: %w", lastTweet, err)
+	}
+
 	plugin.scraper = twitterscraper.New().WithReplies(true)
 
-	tweets, err := plugin.retrieveTweetsSince(lastTweet)
+	tweets, err := plugin.retrieveTweetsSince(sortableLastTweet)
 	if err != nil {
 		return lastTweet, err
 	}
@@ -149,11 +155,16 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	return lastTweet, nil
 }
 
-func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet string) ([]twitterscraper.Tweet, error) {
+func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet uint64) ([]twitterscraper.Tweet, error) {
 	var result []twitterscraper.Tweet
 
 	for tweet := range plugin.scraper.GetTweets(goContext.Background(), plugin.Account, 3200) {
-		if tweet.ID == lastTweet {
+		sortableId, err := strconv.ParseUint(tweet.ID, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("tweet ID '%s' is not valid snowflake: %w", tweet.ID, err)
+		}
+
+		if sortableId <= lastTweet {
 			break
 		}
 
