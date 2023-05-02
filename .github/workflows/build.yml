@@ -25,10 +25,11 @@ jobs:
         with:
           go-version: 1.17
       - name: Build with GoReleaser
+        if: github.event_name == 'pull_request' || (!startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/master')
         uses: goreleaser/goreleaser-action@v2
         with:
           version: latest
-          args: release --split --clean
+          args: build --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish Release
@@ -36,7 +37,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v2
         with:
           version: latest
-          args: continue
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload assets
