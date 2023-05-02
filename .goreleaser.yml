@@ -56,55 +56,21 @@ dockers:
       - "--label=org.opencontainers.image.licenses=MIT"
     extra_files:
       - docker-run.sh
-  - id: amd64-latest
-    goarch: amd64
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:sha-{{ .ShortCommit }}-amd64"
-    use: buildx
-    build_flag_templates:
-      - "--pull"
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.description={{ .ProjectName }}"
-      - "--label=org.opencontainers.image.url=https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
-      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.licenses=MIT"
-    skip_push: false
-    extra_files:
-      - docker-run.sh
-  - id: arm64-latest
-    goarch: arm64
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:sha-{{ .ShortCommit }}-arm64v8"
-    use: buildx
-    build_flag_templates:
-      - "--pull"
-      - "--platform=linux/arm64/v8"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.description={{ .ProjectName }}"
-      - "--label=org.opencontainers.image.url=https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
-      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_REPOSITORY }}"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.licenses=MIT"
-    skip_push: false
-    extra_files:
-      - docker-run.sh
 docker_manifests:
   - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:sha-{{ .ShortCommit }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:sha-{{ .ShortCommit }}-arm64v8"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-arm64v8"
     skip_push: false
   - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Major }}.{{ .Minor }}"
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-amd64"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-arm64v8"
   - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Major }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-arm64v8"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:sha-{{ .ShortCommit }}"
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-amd64"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Version }}-arm64v8"
