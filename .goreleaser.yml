@@ -36,6 +36,7 @@ dockers:
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.licenses=MIT"
+    skip_push: false
     extra_files:
       - docker-run.sh
   - id: arm64
@@ -54,6 +55,7 @@ dockers:
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.licenses=MIT"
+    skip_push: false
     extra_files:
       - docker-run.sh
 docker_manifests:
