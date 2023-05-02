@@ -31,6 +31,8 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
+    extra_files:
+      - docker-run.sh
   - id: arm64
     goarch: arm64
     image_templates:
@@ -42,6 +44,8 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
+    extra_files:
+      - docker-run.sh
 docker_manifests:
   - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
     image_templates:

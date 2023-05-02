@@ -1,3 +1,5 @@
 FROM scratch
-ENTRYPOINT ["/mybin"]
-COPY mybin /
+WORKDIR /var/run/sanderson-notifications
+ENTRYPOINT ["/docker-run.sh"]
+COPY docker-run.sh /
+COPY sanderson-notifications /
