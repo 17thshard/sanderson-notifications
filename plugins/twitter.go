@@ -13,6 +13,7 @@ type TwitterPlugin struct {
 	TweetMessage            string   `mapstructure:"tweetMessage"`
 	RetweetMessage          string   `mapstructure:"retweetMessage"`
 	ExcludedRetweetAccounts []string `mapstructure:"excludeRetweetsOf"`
+	EmbedURL                string   `mapstructure:"embedUrl"`
 	retweetExclusions       map[string]bool
 	scraper                 *twitterscraper.Scraper
 }
@@ -134,11 +135,17 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 			}
 		}
 
-		text := fmt.Sprintf("%s https://twitter.com/%s/status/%s", message, messageTweet.Username, messageTweet.ID)
+		baseUrl := "https://fxtwitter.com"
+		if len(plugin.EmbedURL) != 0 {
+			baseUrl = plugin.EmbedURL
+		}
+
+		text := fmt.Sprintf("%s %s/%s/status/%s", message, baseUrl, messageTweet.Username, messageTweet.ID)
 		if tweet.RetweetedStatus != nil {
 			text = fmt.Sprintf(
-				"%s (https://twitter.com/%s/status/%s)",
+				"%s (<%s/%s/status/%s>)",
 				text,
+				baseUrl,
 				tweet.Username,
 				tweet.ID,
 			)
