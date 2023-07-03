@@ -64,6 +64,10 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	}
 
 	plugin.scraper = twitterscraper.New().WithReplies(true)
+	err = plugin.scraper.LoginOpenAccount()
+	if err != nil {
+		return nil, fmt.Errorf("could not log into Twitter: %w", err)
+	}
 
 	tweets, err := plugin.retrieveTweetsSince(sortableLastTweet)
 	if err != nil {
