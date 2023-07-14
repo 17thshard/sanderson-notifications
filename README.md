@@ -157,17 +157,26 @@ nickname: Brandon
 tweetMessage: Brandon tweeted
 retweetMessage: Brandon retweeted
 excludeRetweetsOf: ['DragonsteelBook']
+
+loginUser: dummy_user
+loginPassword: foobar
+cookiePath: twitter-cookies.json
 ```
-| Field               | Mandatory | Description                                                                     |
-|---------------------|:---------:|---------------------------------------------------------------------------------|
-| `account`           |     ✔️    | Twitter handle (without `@`) for account to check tweets for                    |
-| `nickname`          |     ❌    | Nickname for the Twitter account to use in Discord messages                     |
-| `tweetMessage`      |     ❌    | Custom message to display for new tweets                                        |
-| `retweetMessage`    |     ❌    | Custom message to display for new retweets                                      |
-| `excludeRetweetsOf` |     ❌    | List of Twitter handles (without `@`) for which retweets should *not* be posted |
+| Field               | Mandatory | Description                                                                               |
+|---------------------|:---------:|-------------------------------------------------------------------------------------------|
+| `account`           |     ✔️    | Twitter handle (without `@`) for account to check tweets for                              |
+| `nickname`          |     ❌    | Nickname for the Twitter account to use in Discord messages                               |
+| `tweetMessage`      |     ❌    | Custom message to display for new tweets                                                  |
+| `retweetMessage`    |     ❌    | Custom message to display for new retweets                                                |
+| `excludeRetweetsOf` |     ❌    | List of Twitter handles (without `@`) for which retweets should *not* be posted           |
+| `loginUser`         |     ❌    | Username for logging into Twitter to access API                                           |
+| `loginPassword`     |     ❌    | Password for logging into Twitter to access API                                           |
+| `cookiePath`        |     ❌    | Path to writable file where cookies can be stored to not require logging in for every run |
 
 If `nickname` and `tweetMessage` as well as `retweetMessage` are all omitted,
 the Twitter display name for the account will be used in a standard message.
+
+If no login credentials are provided, a default "open account" will be used which may not work.
 
 #### Offset format
 Offsets are stored as a JSON string such as

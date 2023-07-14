@@ -2,8 +2,11 @@ package plugins
 
 import (
 	goContext "context"
+	"encoding/json"
 	"fmt"
 	twitterscraper "github.com/n0madic/twitter-scraper"
+	"net/http"
+	"os"
 	"strconv"
 )
 
@@ -14,8 +17,13 @@ type TwitterPlugin struct {
 	RetweetMessage          string   `mapstructure:"retweetMessage"`
 	ExcludedRetweetAccounts []string `mapstructure:"excludeRetweetsOf"`
 	EmbedURL                string   `mapstructure:"embedUrl"`
-	retweetExclusions       map[string]bool
-	scraper                 *twitterscraper.Scraper
+
+	LoginUser       string `mapstructure:"loginUser"`
+	LoginPassword   string `mapstructure:"loginPassword"`
+	LoginCookiePath string `mapstructure:"cookiePath"`
+
+	retweetExclusions map[string]bool
+	scraper           *twitterscraper.Scraper
 }
 
 func (plugin *TwitterPlugin) Name() string {
@@ -65,17 +73,22 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	}
 
 	plugin.scraper = twitterscraper.New().WithReplies(true)
-	err = plugin.scraper.LoginOpenAccount()
+
+	err = plugin.login(context)
 	if err != nil {
 		return lastTweet, fmt.Errorf("could not log into Twitter: %w", err)
 	}
 
 	if !plugin.scraper.IsLoggedIn() {
-		context.Info.Println("Wasn't logged into Twitter, ignoring due to API woes...")
-		return lastTweet, nil
+		return lastTweet, fmt.Errorf("was not logged into Twitter, maybe try other credentials")
 	}
 
 	tweets, err := plugin.retrieveTweetsSince(sortableLastTweet)
+	if err != nil {
+		return lastTweet, err
+	}
+
+	err = plugin.saveLoginState()
 	if err != nil {
 		return lastTweet, err
 	}
@@ -169,6 +182,67 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	}
 
 	return lastTweet, nil
+}
+
+func (plugin *TwitterPlugin) login(context PluginContext) error {
+	if len(plugin.LoginCookiePath) > 0 {
+		if _, err := os.Stat(plugin.LoginCookiePath); err == nil {
+			f, err := os.Open(plugin.LoginCookiePath)
+			if err != nil {
+				return fmt.Errorf("could not open %s: %w", plugin.LoginCookiePath, err)
+			}
+
+			var cookies []*http.Cookie
+			err = json.NewDecoder(f).Decode(&cookies)
+			if err != nil {
+				return fmt.Errorf("could not read cookies from %s: %w", plugin.LoginCookiePath, err)
+			}
+
+			plugin.scraper.SetCookies(cookies)
+		}
+	}
+
+	if plugin.scraper.IsLoggedIn() {
+		context.Info.Printf("Reused existing session based on cookies")
+		return nil
+	}
+
+	var err error
+	if len(plugin.LoginUser) > 0 {
+		err = plugin.scraper.Login(plugin.LoginUser, plugin.LoginPassword)
+	} else {
+		err = plugin.scraper.LoginOpenAccount()
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (plugin *TwitterPlugin) saveLoginState() error {
+	if len(plugin.LoginCookiePath) == 0 || !plugin.scraper.IsLoggedIn() {
+		return nil
+	}
+
+	cookies := plugin.scraper.GetCookies()
+	js, err := json.Marshal(cookies)
+	if err != nil {
+		return fmt.Errorf("could not marshal cookies: %w", err)
+	}
+
+	f, err := os.Create(plugin.LoginCookiePath)
+	if err != nil {
+		return fmt.Errorf("could not open %s: %w", plugin.LoginCookiePath, err)
+	}
+
+	_, err = f.Write(js)
+	if err != nil {
+		return fmt.Errorf("could not write to %s: %w", plugin.LoginCookiePath, err)
+	}
+
+	return nil
 }
 
 func (plugin *TwitterPlugin) retrieveTweetsSince(lastTweet uint64) ([]twitterscraper.Tweet, error) {
