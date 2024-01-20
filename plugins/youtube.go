@@ -30,8 +30,8 @@ func (plugin *YouTubePlugin) Validate() error {
 		return fmt.Errorf("channel ID for YouTube must not be empty")
 	}
 
-	if len(plugin.Nickname) == 0 && len(plugin.Messages) == 0 {
-		return fmt.Errorf("either a channel nickname or a YouTube post message must be given")
+	if len(plugin.Token) == 0 {
+		return fmt.Errorf("API token for YouTube must not be empty")
 	}
 
 	plugin.excludedTypes = make(map[string]bool)

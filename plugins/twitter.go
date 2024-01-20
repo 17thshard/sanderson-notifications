@@ -31,6 +31,10 @@ func (plugin *TwitterPlugin) Name() string {
 }
 
 func (plugin *TwitterPlugin) Validate() error {
+	if len(plugin.Account) == 0 {
+		return fmt.Errorf("account name for Twitter must not be empty")
+	}
+
 	plugin.retweetExclusions = make(map[string]bool)
 	for _, account := range plugin.ExcludedRetweetAccounts {
 		plugin.retweetExclusions[account] = true
