@@ -158,7 +158,7 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 
 		handledEntries[entry.ID] = true
 
-		context.Info.Println("Reported YouTube post ", entry.Title)
+		context.Info.Println("Reported YouTube post", entry.Title)
 	}
 
 	return handledEntries, nil
@@ -214,7 +214,7 @@ func (plugin YouTubePlugin) getShortMessage(entry YouTubePost) (*string, error) 
 		return nil, nil
 	}
 
-	response, err := plugin.client.Head(fmt.Sprintf("https://youtube.com/shorts/%s", entry.VideoID))
+	response, err := plugin.client.Head(fmt.Sprintf("https://www.youtube.com/shorts/%s", entry.VideoID))
 
 	if err != nil {
 		return nil, err
