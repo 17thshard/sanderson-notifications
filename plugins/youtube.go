@@ -11,18 +11,21 @@ import (
 )
 
 type YouTubePlugin struct {
-	ChannelId string `mapstructure:"channelId"`
-	Nickname  string
-	Messages  map[string]string
-	Token     string
-	client    *http.Client
+	ChannelId         string `mapstructure:"channelId"`
+	Nickname          string
+	Messages          map[string]string
+	Token             string
+	ExcludedPostTypes []string `mapstructure:"excludedPostTypes"`
+
+	excludedTypes map[string]bool
+	client        *http.Client
 }
 
-func (plugin YouTubePlugin) Name() string {
+func (plugin *YouTubePlugin) Name() string {
 	return "youtube"
 }
 
-func (plugin YouTubePlugin) Validate() error {
+func (plugin *YouTubePlugin) Validate() error {
 	if len(plugin.ChannelId) == 0 {
 		return fmt.Errorf("channel ID for YouTube must not be empty")
 	}
@@ -31,10 +34,15 @@ func (plugin YouTubePlugin) Validate() error {
 		return fmt.Errorf("either a channel nickname or a YouTube post message must be given")
 	}
 
+	plugin.excludedTypes = make(map[string]bool)
+	for _, postType := range plugin.ExcludedPostTypes {
+		plugin.excludedTypes[postType] = true
+	}
+
 	return nil
 }
 
-func (plugin YouTubePlugin) OffsetPrototype() interface{} {
+func (plugin *YouTubePlugin) OffsetPrototype() interface{} {
 	return map[string]bool{}
 }
 
@@ -45,7 +53,7 @@ type YouTubePost struct {
 	VideoID string
 }
 
-func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
+func (plugin *YouTubePlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Println("Checking for YouTube updates...")
 
 	plugin.client = &http.Client{
@@ -124,27 +132,26 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 	}
 
 	for _, entry := range sortedEntries {
-		message := fmt.Sprintf("%s posted something on YouTube", plugin.Nickname)
-		if configMessage, exists := plugin.Messages["video"]; exists {
-			message = configMessage
-		}
-
-		shortMessage, err := plugin.getShortMessage(entry)
+		info, err := plugin.buildPostInfo(entry, youtubeService)
 		if err != nil {
-			return nil, err
+			return handledEntries, err
 		}
 
-		if shortMessage != nil {
-			message = *shortMessage
+		if exclude, present := plugin.excludedTypes[info.Type]; present && exclude {
+			context.Info.Printf("Ignoring YouTube %s '%s'", info.Type, entry.Title)
+			handledEntries[entry.ID] = true
+
+			continue
 		}
 
-		liveEventMessage, err := plugin.getLiveEventMessage(entry, youtubeService, context)
-		if err != nil {
-			return nil, err
+		template := info.DefaultTemplate
+		if configTemplate, exists := plugin.Messages[info.Type]; exists {
+			template = configTemplate
 		}
 
-		if liveEventMessage != nil {
-			message = *liveEventMessage
+		message := template
+		if info.FormatMessage != nil {
+			message = info.FormatMessage(template)
 		}
 
 		if err = context.Discord.Send(
@@ -158,17 +165,42 @@ func (plugin YouTubePlugin) Check(offset interface{}, context PluginContext) (in
 
 		handledEntries[entry.ID] = true
 
-		context.Info.Println("Reported YouTube post", entry.Title)
+		context.Info.Printf("Reported YouTube post '%s'", entry.Title)
 	}
 
 	return handledEntries, nil
 }
 
-func (plugin YouTubePlugin) getLiveEventMessage(entry YouTubePost, youtubeService *youtube.Service, context PluginContext) (*string, error) {
+type postInfo struct {
+	Type            string
+	DefaultTemplate string
+	FormatMessage   func(string) string
+}
+
+func (plugin *YouTubePlugin) buildPostInfo(entry YouTubePost, youtubeService *youtube.Service) (*postInfo, error) {
 	if entry.VideoID == "" {
 		return nil, nil
 	}
 
+	info, err := plugin.buildLiveEventInfo(entry, youtubeService)
+	if info != nil || err != nil {
+		return info, err
+	}
+
+	info, err = plugin.buildShortInfo(entry)
+	if info != nil || err != nil {
+		return info, err
+	}
+
+	info = &postInfo{
+		Type:            "video",
+		DefaultTemplate: fmt.Sprintf("%s posted something on YouTube", plugin.Nickname),
+	}
+
+	return info, nil
+}
+
+func (plugin *YouTubePlugin) buildLiveEventInfo(entry YouTubePost, youtubeService *youtube.Service) (*postInfo, error) {
 	videoList, err := youtubeService.Videos.List([]string{"liveStreamingDetails", "status"}).Id(entry.VideoID).Do()
 
 	if err != nil {
@@ -194,26 +226,23 @@ func (plugin YouTubePlugin) getLiveEventMessage(entry YouTubePost, youtubeServic
 		return nil, nil
 	}
 
-	videoType := "livestream"
-	template := fmt.Sprintf("%s is going live on YouTube %%s!", plugin.Nickname)
+	info := postInfo{
+		Type:            "livestream",
+		DefaultTemplate: fmt.Sprintf("%s is going live on YouTube %%s!", plugin.Nickname),
+		FormatMessage: func(template string) string {
+			return fmt.Sprintf(template, fmt.Sprintf("<t:%d:R>", parsedStart.Unix()))
+		},
+	}
+
 	if video.Status.UploadStatus == "processed" {
-		videoType = "premiere"
-		template = fmt.Sprintf("%s will premiere a video on YouTube %%s!", plugin.Nickname)
+		info.Type = "premiere"
+		info.DefaultTemplate = fmt.Sprintf("%s will premiere a video on YouTube %%s!", plugin.Nickname)
 	}
 
-	if configMessage, exists := plugin.Messages[videoType]; exists {
-		template = configMessage
-	}
-
-	result := fmt.Sprintf(template, fmt.Sprintf("<t:%d:R>", parsedStart.Unix()))
-	return &result, nil
+	return &info, nil
 }
 
-func (plugin YouTubePlugin) getShortMessage(entry YouTubePost) (*string, error) {
-	if entry.VideoID == "" {
-		return nil, nil
-	}
-
+func (plugin *YouTubePlugin) buildShortInfo(entry YouTubePost) (*postInfo, error) {
 	response, err := plugin.client.Head(fmt.Sprintf("https://www.youtube.com/shorts/%s", entry.VideoID))
 
 	if err != nil {
@@ -224,10 +253,10 @@ func (plugin YouTubePlugin) getShortMessage(entry YouTubePost) (*string, error) 
 		return nil, nil
 	}
 
-	message := fmt.Sprintf("%s posted a short on YouTube!", plugin.Nickname)
-	if configMessage, exists := plugin.Messages["short"]; exists {
-		message = configMessage
+	info := postInfo{
+		Type:            "short",
+		DefaultTemplate: fmt.Sprintf("%s posted a short on YouTube!", plugin.Nickname),
 	}
 
-	return &message, nil
+	return &info, nil
 }

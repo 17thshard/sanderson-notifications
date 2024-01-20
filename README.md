@@ -193,25 +193,45 @@ Any tweet and retweet that has been posted since the offset and is not from an e
 
 ### YouTube Feed (`youtube`)
 Checks a YouTube channel's atom feed (see e.g. [Brandon Sanderson's channel](https://www.youtube.com/feeds/videos.xml?channel_id=UC3g-w83Cb5pEAu5UmRrge-A))
-for new videos and livestreams. If no starting offset is specified, all videos currently in the feed will be posted. 
+for new videos and livestreams. If no starting offset is specified, all videos currently in the feed will be posted.
+
+Note that this requires access to the YouTube API for identifying livestreams and related data like scheduled start times, to this end, you need to acquire an API token for the YouTube Data API.
 
 #### Configuration
 The YAML structure for this plugin's configuration is as follows:
 ```yaml
 channelId: ChannelId
+token: youtubeToken
 nickname: Brandon
-message: Brandon posted on YouTube
+messages:
+  video: Brandon posted a video on YouTube
+  livestream: Brandon will be streaming live %s
+excludedPostTypes:
+  - short
 ```
-| Field               | Mandatory | Description                                                 |
-|---------------------|:---------:|-------------------------------------------------------------|
-| `channelId`         |     ✔️     | The *ID* of the YouTube channel for which to check the feed |
-| `nickname`          |     ❌    | Nickname for the YouTube channel to use in Discord messages |
-| `message`           |     ❌    | Custom message to display for new videos                    |
+| Field               | Mandatory | Description                                                                                  |
+|---------------------|:---------:|----------------------------------------------------------------------------------------------|
+| `channelId`         |     ✔️     | The *ID* of the YouTube channel for which to check the feed                                  |
+| `token`             |     ✔️     | Token for the YouTube Data API v3                                                            |
+| `nickname`          |     ❌    | Nickname for the YouTube channel to use in Discord messages                                  |
+| `messages`          |     ❌    | A dictionary where keys represent the post type and values are custom messages for that type |
+| `excludedPostTypes` |     ❌    | A list of post types from the feed not to report                                             |
 
 Note that the *ID* of the channel is required here, which can differ from the username visible in a channel's URL.
 A channel ID can be retrieved from a channel page's source code.
 
-If `nickname` and `message` are all omitted, the channel name for the YouTube channel will be used in a standard message.
+If `nickname` and `messages` are all omitted, the channel name for the YouTube channel will be used in a standard message.
+
+Both `messages` and `excludedPostTypes` support several different post types, namely `short`, `livestream`, `premiere`, and `video`.
+The latter is used by default if no other type could be identified.
+The messages for `livestream` and `premiere` can use `%s` within their definition as a placeholder for a relative timestamp in the Discord message.
+
+#### Acquiring an API token
+Getting access to the YouTube Data API, like most other Google services, requires a Google Cloud project.
+See the [official guide](https://developers.google.com/workspace/guides/create-project) for setting that up.
+
+Within your project's Cloud Console, you must enable the [YouTube Data API v3](https://console.cloud.google.com/apis/api/youtube.googleapis.com).
+Then you can create [API key credentials](https://console.cloud.google.com/apis/api/youtube.googleapis.com/credentials) for that API, which will be the token you need to specify in the config.
 
 #### Offset format
 Offsets are stored as a JSON object such as
