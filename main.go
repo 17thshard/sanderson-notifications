@@ -60,7 +60,7 @@ func main() {
 
 	infoLog.Println("Checking for updates...")
 
-	client := CreateDiscordClient(config.DiscordWebhook)
+	client := CreateDiscordClient(config.DiscordWebhook, config.DiscordMentions)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup

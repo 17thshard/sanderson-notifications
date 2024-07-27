@@ -15,18 +15,38 @@ const avatarBaseUrl = "https://raw.githubusercontent.com/Palanaeum/sanderson-not
 const maxRetries = 3
 
 type DiscordClient struct {
-	webhookUrl string
-	info       *log.Logger
-	error      *log.Logger
+	webhookUrl    string
+	mentions      DiscordMentions
+	mentionPrefix string
+	info          *log.Logger
+	error         *log.Logger
 }
 
-func CreateDiscordClient(webhook string) DiscordClient {
+type DiscordMentions struct {
+	Parse []string `json:"parse" yaml:"-"`
+	Roles []string `json:"roles" yaml:"roles"`
+	Users []string `json:"users" yaml:"users"`
+}
+
+func CreateDiscordClient(webhook string, mentions DiscordMentions) DiscordClient {
 	infoLog, errorLog := CreateLoggers("main")
 
+	mentionPrefix := ""
+	for _, role := range mentions.Roles {
+		mentionPrefix += fmt.Sprintf("<@&%s> ", role)
+	}
+	for _, user := range mentions.Users {
+		mentionPrefix += fmt.Sprintf("<@%s> ", user)
+	}
+
+	mentions.Parse = make([]string, 0)
+
 	return DiscordClient{
-		webhookUrl: fmt.Sprintf("%s/%s", webhookBaseUrl, webhook),
-		info:       infoLog,
-		error:      errorLog,
+		webhookUrl:    fmt.Sprintf("%s/%s", webhookBaseUrl, webhook),
+		mentions:      mentions,
+		mentionPrefix: mentionPrefix,
+		info:          infoLog,
+		error:         errorLog,
 	}
 }
 
@@ -36,9 +56,10 @@ func (discord *DiscordClient) Send(text, name, avatar string, embed interface{})
 
 func (discord *DiscordClient) trySend(text, name, avatar string, embed interface{}, try int) error {
 	body := map[string]interface{}{
-		"username":   name,
-		"avatar_url": fmt.Sprintf("%s/%s.png", avatarBaseUrl, avatar),
-		"content":    text,
+		"username":         name,
+		"avatar_url":       fmt.Sprintf("%s/%s.png", avatarBaseUrl, avatar),
+		"content":          fmt.Sprintf("%s%s", discord.mentionPrefix, text),
+		"allowed_mentions": discord.mentions,
 	}
 
 	if embed != nil {

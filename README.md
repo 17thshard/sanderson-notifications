@@ -25,6 +25,9 @@ The basic structure of a config file is as follows
 
 ```yaml
 discordWebhook: '<webhook-id>'
+discordMentions:
+  roles: ['<role-id>']
+  users: ['<user-id>']
 shared:
   progress:
     url: https://brandon-sanderson.com
@@ -42,6 +45,9 @@ connectors:
 
 The `discordWebhook` item is mandatory and must be the ID (i.e. channel ID + token) of a Discord webhook. Simply use the
 value after `https://discord.com/api/webhooks/` from the webhook URL Discord provides you with.
+
+The `discordMentions` item can optionally be specified to have all webhook messages contain mentions for the listed roles
+and users. _Note that in general no additional mentions will be parsed from messages, including `@everyone`._
 
 The `shared` section defines configuration values that are used across all connectors using a plugin. Keys in the map
 must be a plugin ID. The shared config object is simply merged into any connector-specific one. Connector configs always

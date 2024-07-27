@@ -1,6 +1,7 @@
 package main
 
 import (
+	"17thshard.com/sanderson-notifications/common"
 	. "17thshard.com/sanderson-notifications/plugins"
 	"fmt"
 	"github.com/mitchellh/mapstructure"
@@ -14,6 +15,7 @@ type ConfigLoader struct {
 
 type Config struct {
 	DiscordWebhook      string                            `yaml:"discordWebhook"`
+	DiscordMentions     common.DiscordMentions            `yaml:"discordMentions"`
 	Connectors          []Connector                       `yaml:"-"`
 	SharedPluginConfigs map[string]map[string]interface{} `yaml:"shared"`
 	RawConnectors       map[string]RawConnector           `yaml:"connectors"`
