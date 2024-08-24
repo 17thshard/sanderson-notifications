@@ -95,7 +95,7 @@ func (plugin ProgressPlugin) Check(offset interface{}, context PluginContext) (i
 }
 
 func readProgress(doc *goquery.Document) ([]Progress, error) {
-	bars := doc.Find(".vc_progress_bar .vc_label")
+	bars := doc.Find("[class^=progress-item-template]")
 	result := make([]Progress, bars.Length())
 
 	if bars.Length() == 0 {
@@ -104,9 +104,9 @@ func readProgress(doc *goquery.Document) ([]Progress, error) {
 	}
 
 	bars.Each(func(i int, selection *goquery.Selection) {
-		title := strings.TrimSpace(selection.Contents().Not("span").Text())
+		title := strings.TrimSpace(selection.Find("[class^=progress-title-template]").Text())
 		link := selection.Find("a").AttrOr("href", "")
-		value := selection.NextFiltered(".vc_single_bar").Find(".vc_bar").AttrOr("data-percentage-value", "0")
+		value := strings.TrimSuffix(selection.Find("[class^=progress-percent-template]").Text(), "%")
 
 		parsedValue, _ := strconv.Atoi(value)
 
