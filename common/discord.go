@@ -17,7 +17,7 @@ const maxRetries = 3
 type DiscordClient struct {
 	webhookUrl    string
 	mentions      DiscordMentions
-	mentionPrefix string
+	mentionSuffix string
 	info          *log.Logger
 	error         *log.Logger
 }
@@ -31,12 +31,16 @@ type DiscordMentions struct {
 func CreateDiscordClient(webhook string, mentions DiscordMentions) DiscordClient {
 	infoLog, errorLog := CreateLoggers("main")
 
-	mentionPrefix := ""
+	mentionSuffix := ""
 	for _, role := range mentions.Roles {
-		mentionPrefix += fmt.Sprintf("<@&%s> ", role)
+		mentionSuffix += fmt.Sprintf("<@&%s> ", role)
 	}
 	for _, user := range mentions.Users {
-		mentionPrefix += fmt.Sprintf("<@%s> ", user)
+		mentionSuffix += fmt.Sprintf("<@%s> ", user)
+	}
+
+	if mentionSuffix != "" {
+		mentionSuffix = fmt.Sprintf("\n-# %s", mentionSuffix)
 	}
 
 	mentions.Parse = make([]string, 0)
@@ -44,7 +48,7 @@ func CreateDiscordClient(webhook string, mentions DiscordMentions) DiscordClient
 	return DiscordClient{
 		webhookUrl:    fmt.Sprintf("%s/%s", webhookBaseUrl, webhook),
 		mentions:      mentions,
-		mentionPrefix: mentionPrefix,
+		mentionSuffix: mentionSuffix,
 		info:          infoLog,
 		error:         errorLog,
 	}
@@ -58,7 +62,7 @@ func (discord *DiscordClient) trySend(text, name, avatar string, embed interface
 	body := map[string]interface{}{
 		"username":         name,
 		"avatar_url":       fmt.Sprintf("%s/%s.png", avatarBaseUrl, avatar),
-		"content":          fmt.Sprintf("%s%s", discord.mentionPrefix, text),
+		"content":          fmt.Sprintf("%s%s", text, discord.mentionSuffix),
 		"allowed_mentions": discord.mentions,
 	}
 
