@@ -4,7 +4,7 @@ import (
 	goContext "context"
 	"encoding/json"
 	"fmt"
-	twitterscraper "github.com/n0madic/twitter-scraper"
+	twitterscraper "github.com/imperatrona/twitter-scraper"
 	"net/http"
 	"os"
 	"strconv"
@@ -215,7 +215,7 @@ func (plugin *TwitterPlugin) login(context PluginContext) error {
 	if len(plugin.LoginUser) > 0 {
 		err = plugin.scraper.Login(plugin.LoginUser, plugin.LoginPassword)
 	} else {
-		err = plugin.scraper.LoginOpenAccount()
+		_, err = plugin.scraper.LoginOpenAccount()
 	}
 
 	if err != nil {
