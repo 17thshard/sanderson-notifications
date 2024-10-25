@@ -145,7 +145,7 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 
 	for _, entry := range sortedEntries {
 		if err = context.Discord.SendWithCustomAvatar(
-			fmt.Sprintf("%s %s", plugin.Message, entry.Link),
+			fmt.Sprintf("%s\n%s", plugin.Message, entry.Link),
 			plugin.Nickname,
 			plugin.AvatarURL,
 			nil,

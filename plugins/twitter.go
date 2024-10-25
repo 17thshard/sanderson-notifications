@@ -162,7 +162,7 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 			baseUrl = plugin.EmbedURL
 		}
 
-		text := fmt.Sprintf("%s %s/%s/status/%s", message, baseUrl, messageTweet.Username, messageTweet.ID)
+		text := fmt.Sprintf("%s\n%s/%s/status/%s", message, baseUrl, messageTweet.Username, messageTweet.ID)
 		if tweet.RetweetedStatus != nil {
 			text = fmt.Sprintf(
 				"%s (<%s/%s/status/%s>)",

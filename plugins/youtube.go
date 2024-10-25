@@ -155,7 +155,7 @@ func (plugin *YouTubePlugin) Check(offset interface{}, context PluginContext) (i
 		}
 
 		if err = context.Discord.Send(
-			fmt.Sprintf("%s %s", message, entry.Link),
+			fmt.Sprintf("%s\n%s", message, entry.Link),
 			"YouTube",
 			"youtube",
 			nil,
