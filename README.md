@@ -111,6 +111,47 @@ The offsets file may be manually edited.
 The plugins are listed with their IDs in parentheses. Besides available configuration options and the offset storage format,
 the change detection mechanism is also explained.
 
+### Atom Feed (`atom`)
+Checks an [Atom feed](https://datatracker.ietf.org/doc/html/rfc4287) (see e.g. [The Cognitive Realm Blog](https://www.dragonsteelbooks.com/blogs/the-cognitive-realm.atom))
+for new entries. If no starting offset is specified, all entries currently in the feed will be posted.
+
+#### Configuration
+The YAML structure for this plugin's configuration is as follows:
+```yaml
+feedUrl: https://www.dragonsteelbooks.com/blogs/the-cognitive-realm.atom
+nickname: The Cognitive Realm Blog
+avatarUrl: https://raw.githubusercontent.com/Palanaeum/sanderson-notifications/master/avatars/dragonsteel.png
+message: A new blog post was published to The Cognitive Realm!
+```
+| Field       | Mandatory | Description                                                                                                                 |
+|-------------|:---------:|-----------------------------------------------------------------------------------------------------------------------------|
+| `feedUrl`   |     ✔️    | URL of the Atom feed                                                                                                        |
+| `nickname`  |     ❌    | Nickname to use for the webhook Discord message. Will use the feed title by default                                         |
+| `avatarUrl` |     ❌    | URL of an avatar to use for the webhook Discord mesasge. Will use the avatar configured for the webhook globally by default |
+| `message`   |     ❌    | Message to display preceding the link to an entry                                                                           |
+
+#### Offset format
+Offsets are stored as a JSON object such as
+```json
+{
+  "https://www.dragonsteelbooks.com/blogs/the-cognitive-realm/light-day-2024": true,
+  "https://www.dragonsteelbooks.com/blogs/the-cognitive-realm/adapting-stonewalkers": true,
+  "https://www.dragonsteelbooks.com/blogs/the-cognitive-realm/brandon-sanderson-fanx24": true
+}
+```
+Keys are feed entry IDs and values indicate whether the entry has been processed.
+Offsets as stored by the application will always have `true` as value, but you may manually change an entry to `false`.
+
+In this case, the entry will be posted to Discord again if it's still in the feed.
+
+#### Change detection
+The current content of the Atom feed is retrieved. Feed entries that are marked with `true` in the current offset are omitted.
+
+If this list of feed entries is non-empty after this process, links to the corresponding entries will be posted in chronological order.
+
+Note how *all* feed entries are inspected again and offsets contain many entries. This is due to the fact that an Atom feed
+may put new entries in-between previously checked ones, so for correctness all of them must be inspected again.
+
 ### Author Progress (`progress`)
 Checks progress bars on an author's website for changes. This plugin is only built with [Brandon Sanderson's website](https://www.brandonsanderson.com/)
 in mind, so it will most likely not work for other author's progress bars, should they have them.
@@ -123,8 +164,8 @@ message: The progress bars on Brandon's website were updated!
 ```
 | Field     | Mandatory | Description                                                   |
 |-----------|:---------:|---------------------------------------------------------------|
-| `url`     |     ✔     | URL of the author's website                                   |
-| `message` |     ✔     | Message to display preceding the embed with progress updates  |
+| `url`     |    ✔️     | URL of the author's website                                   |
+| `message` |    ✔️     | Message to display preceding the embed with progress updates  |
 
 #### Offset format
 Offsets are stored as a JSON array of JSON objects with the following structure
