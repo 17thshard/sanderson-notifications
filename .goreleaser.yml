@@ -1,3 +1,4 @@
+version: 2
 project_name: sanderson-notifications
 before:
   hooks:
@@ -81,7 +82,7 @@ docker_manifests:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 changelog:
   sort: asc
   filters:
