@@ -21,6 +21,9 @@ func main() {
 
 	configLoader := ConfigLoader{
 		AvailablePlugins: map[string]func() Plugin{
+			"atom": func() Plugin {
+				return &AtomPlugin{}
+			},
 			"progress": func() Plugin {
 				return &ProgressPlugin{}
 			},

@@ -55,13 +55,17 @@ func CreateDiscordClient(webhook string, mentions DiscordMentions) DiscordClient
 }
 
 func (discord *DiscordClient) Send(text, name, avatar string, embed interface{}) error {
-	return discord.trySend(text, name, avatar, embed, 1)
+	return discord.trySend(text, name, fmt.Sprintf("%s/%s.png", avatarBaseUrl, avatar), embed, 1)
 }
 
-func (discord *DiscordClient) trySend(text, name, avatar string, embed interface{}, try int) error {
+func (discord *DiscordClient) SendWithCustomAvatar(text, name, avatarURL string, embed interface{}) error {
+	return discord.trySend(text, name, avatarURL, embed, 1)
+}
+
+func (discord *DiscordClient) trySend(text, name, avatarURL string, embed interface{}, try int) error {
 	body := map[string]interface{}{
 		"username":         name,
-		"avatar_url":       fmt.Sprintf("%s/%s.png", avatarBaseUrl, avatar),
+		"avatar_url":       avatarURL,
 		"content":          fmt.Sprintf("%s%s", text, discord.mentionSuffix),
 		"allowed_mentions": discord.mentions,
 	}
@@ -98,7 +102,7 @@ func (discord *DiscordClient) trySend(text, name, avatar string, embed interface
 		discord.info.Printf("Being rate late limited by Discord, waiting for %fs\n", data.Delay)
 		time.Sleep(time.Duration(data.Delay * float32(time.Second)))
 
-		return discord.trySend(text, name, avatar, embed, try+1)
+		return discord.trySend(text, name, avatarURL, embed, try+1)
 	}
 
 	if res.StatusCode != http.StatusNoContent {
