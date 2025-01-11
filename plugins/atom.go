@@ -2,17 +2,20 @@ package plugins
 
 import (
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed/atom"
 	"net/http"
+	"slices"
 	"sort"
 	"time"
 )
 
 type AtomPlugin struct {
-	FeedURL   string `mapstructure:"feedUrl"`
-	Nickname  string
-	AvatarURL string `mapstructure:"avatarUrl"`
-	Message   string
+	FeedURL      string `mapstructure:"feedUrl"`
+	Nickname     string
+	AvatarURL    string `mapstructure:"avatarUrl"`
+	Message      string
+	ExcludedTags []string `mapstructure:"excludedTags"`
 
 	client *http.Client
 }
@@ -73,7 +76,7 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 
 	res, err := plugin.client.Get(plugin.FeedURL)
 	if err != nil {
-		return offset, fmt.Errorf("could not read Atoom feed at '%s': %w", plugin.FeedURL, err)
+		return offset, fmt.Errorf("could not read Atom feed at '%s': %w", plugin.FeedURL, err)
 	}
 	defer res.Body.Close()
 
@@ -109,11 +112,23 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 			continue
 		}
 
+		link := entry.Links[0].Href
+		hasExcludedTag, err := plugin.HasExcludedTag(link)
+		if err != nil {
+			return offset, fmt.Errorf("could not fully handle Atom feed at '%s': %w", plugin.FeedURL, err)
+		}
+
+		if hasExcludedTag {
+			handledEntries[entry.ID] = true
+			context.Info.Printf("Skipping post '%s' from feed at '%s' as it has an excluded tag", entry.Title, plugin.FeedURL)
+			continue
+		}
+
 		sortedEntries = append([]AtomPost{{
 			Timestamp: entry.PublishedParsed,
 			ID:        entry.ID,
 			Title:     entry.Title,
-			Link:      entry.Links[0].Href,
+			Link:      link,
 		}}, sortedEntries...)
 	}
 
@@ -159,4 +174,40 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 	}
 
 	return handledEntries, nil
+}
+
+func (plugin *AtomPlugin) HasExcludedTag(link string) (bool, error) {
+	if len(plugin.ExcludedTags) == 0 {
+		return false, nil
+	}
+
+	res, err := http.Get(link)
+
+	if err != nil {
+		return false, fmt.Errorf("could not read entry '%s': %w", link, err)
+	}
+	defer res.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		return false, err
+	}
+
+	tags := doc.Find(".article__meta-tags .tags a.button")
+
+	if tags.Length() == 0 {
+		return false, nil
+	}
+
+	excludedTagFound := false
+	tags.EachWithBreak(func(i int, tag *goquery.Selection) bool {
+		if slices.Contains(plugin.ExcludedTags, tag.Text()) {
+			excludedTagFound = true
+			return false
+		}
+
+		return true
+	})
+
+	return excludedTagFound, nil
 }

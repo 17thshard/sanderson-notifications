@@ -123,12 +123,13 @@ nickname: The Cognitive Realm Blog
 avatarUrl: https://raw.githubusercontent.com/Palanaeum/sanderson-notifications/master/avatars/dragonsteel.png
 message: A new blog post was published to The Cognitive Realm!
 ```
-| Field       | Mandatory | Description                                                                                                                 |
-|-------------|:---------:|-----------------------------------------------------------------------------------------------------------------------------|
-| `feedUrl`   |     ✔️    | URL of the Atom feed                                                                                                        |
-| `nickname`  |     ❌    | Nickname to use for the webhook Discord message. Will use the feed title by default                                         |
-| `avatarUrl` |     ❌    | URL of an avatar to use for the webhook Discord mesasge. Will use the avatar configured for the webhook globally by default |
-| `message`   |     ❌    | Message to display preceding the link to an entry                                                                           |
+| Field          | Mandatory | Description                                                                                                                                                                                                        |
+|----------------|:---------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `feedUrl`      |    ✔️     | URL of the Atom feed                                                                                                                                                                                               |
+| `nickname`     |     ❌     | Nickname to use for the webhook Discord message. Will use the feed title by default                                                                                                                                |
+| `avatarUrl`    |     ❌     | URL of an avatar to use for the webhook Discord message. Will use the avatar configured for the webhook globally by default                                                                                        |
+| `message`      |     ❌     | Message to display preceding the link to an entry                                                                                                                                                                  |
+| `excludedTags` |     ❌     | List of tags that must not be present on a blog post to be included. If *any* of these tags is present, the post will be excluded. **Note:** Tags load the URL of the post and assume Dragonsteel's tagging format |
 
 #### Offset format
 Offsets are stored as a JSON object such as
