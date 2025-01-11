@@ -122,6 +122,8 @@ feedUrl: https://www.dragonsteelbooks.com/blogs/the-cognitive-realm.atom
 nickname: The Cognitive Realm Blog
 avatarUrl: https://raw.githubusercontent.com/Palanaeum/sanderson-notifications/master/avatars/dragonsteel.png
 message: A new blog post was published to The Cognitive Realm!
+excludedTags: [Weekly Update]
+maxAge: 168h
 ```
 | Field          | Mandatory | Description                                                                                                                                                                                                        |
 |----------------|:---------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -130,6 +132,7 @@ message: A new blog post was published to The Cognitive Realm!
 | `avatarUrl`    |     ❌     | URL of an avatar to use for the webhook Discord message. Will use the avatar configured for the webhook globally by default                                                                                        |
 | `message`      |     ❌     | Message to display preceding the link to an entry                                                                                                                                                                  |
 | `excludedTags` |     ❌     | List of tags that must not be present on a blog post to be included. If *any* of these tags is present, the post will be excluded. **Note:** Tags load the URL of the post and assume Dragonsteel's tagging format |
+| `maxAge`       |     ❌     | The maximum age a blog post may have (from its publishing date) to be included. Accepts any value that [Go's `ParseDuration`](https://pkg.go.dev/time#ParseDuration) does                                          |
 
 #### Offset format
 Offsets are stored as a JSON object such as

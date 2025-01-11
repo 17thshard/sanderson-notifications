@@ -56,7 +56,15 @@ func (loader ConfigLoader) Load(path string) (*Config, error) {
 		sharedConfig := config.SharedPluginConfigs[rawConnector.Plugin]
 		rawConnector.Config = mergeKeys(rawConnector.Config, sharedConfig)
 		if len(rawConnector.Config) > 0 {
-			if err = mapstructure.Decode(rawConnector.Config, &plugin); err != nil {
+			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+				Result:     &plugin,
+				DecodeHook: mapstructure.ComposeDecodeHookFunc(mapstructure.StringToTimeDurationHookFunc()),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("could not parse config for connector '%s' with plugin '%s': %w", name, rawConnector.Plugin, err)
+			}
+
+			if err = decoder.Decode(rawConnector.Config); err != nil {
 				return nil, fmt.Errorf("could not parse config for connector '%s' with plugin '%s': %w", name, rawConnector.Plugin, err)
 			}
 		}

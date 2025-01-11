@@ -15,7 +15,8 @@ type AtomPlugin struct {
 	Nickname     string
 	AvatarURL    string `mapstructure:"avatarUrl"`
 	Message      string
-	ExcludedTags []string `mapstructure:"excludedTags"`
+	ExcludedTags []string       `mapstructure:"excludedTags"`
+	MaxAge       *time.Duration `mapstructure:"maxAge"`
 
 	client *http.Client
 }
@@ -159,6 +160,12 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 	}
 
 	for _, entry := range sortedEntries {
+		if entry.Timestamp != nil && plugin.MaxAge != nil && time.Now().Sub(*entry.Timestamp) > *plugin.MaxAge {
+			handledEntries[entry.ID] = true
+			context.Info.Printf("Skipping post '%s' from feed at '%s' as it is too old", entry.Title, plugin.FeedURL)
+			continue
+		}
+
 		if err = context.Discord.SendWithCustomAvatar(
 			fmt.Sprintf("%s\n%s", plugin.Message, entry.Link),
 			plugin.Nickname,
