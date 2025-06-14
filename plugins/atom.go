@@ -16,6 +16,7 @@ type AtomPlugin struct {
 	AvatarURL    string `mapstructure:"avatarUrl"`
 	Message      string
 	ExcludedTags []string       `mapstructure:"excludedTags"`
+	MinAge       *time.Duration `mapstructure:"minAge"`
 	MaxAge       *time.Duration `mapstructure:"maxAge"`
 
 	client *http.Client
@@ -160,7 +161,17 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 	}
 
 	for _, entry := range sortedEntries {
-		if entry.Timestamp != nil && plugin.MaxAge != nil && time.Now().Sub(*entry.Timestamp) > *plugin.MaxAge {
+		var entryAge time.Duration
+		if entry.Timestamp != nil {
+			entryAge = time.Since(*entry.Timestamp)
+		}
+
+		if plugin.MinAge != nil && entryAge < *plugin.MinAge {
+			context.Info.Printf("Skipping post '%s' from feed at '%s' for now as it is too new", entry.Title, plugin.FeedURL)
+			continue
+		}
+
+		if plugin.MaxAge != nil && entryAge > *plugin.MaxAge {
 			handledEntries[entry.ID] = true
 			context.Info.Printf("Skipping post '%s' from feed at '%s' as it is too old", entry.Title, plugin.FeedURL)
 			continue
