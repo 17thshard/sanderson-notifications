@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"sync"
@@ -79,7 +80,7 @@ func main() {
 	for _, connector := range config.Connectors {
 		connector := connector
 		connectorInfo, connectorError := CreateLoggers(fmt.Sprintf("connector=%s", connector.Name))
-		pluginContext := PluginContext{Discord: &client, Info: connectorInfo, Error: connectorError, Context: &ctx}
+		pluginContext := PluginContext{Discord: &client, Info: connectorInfo, Error: connectorError, Context: &ctx, HTTPClient: &http.Client{}}
 		go func() {
 			defer wg.Done()
 			var offset interface{}

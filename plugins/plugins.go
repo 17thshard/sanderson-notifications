@@ -1,10 +1,19 @@
 package plugins
 
 import (
-	"17thshard.com/sanderson-notifications/common"
 	"context"
 	"log"
+	"net/http"
 )
+
+type HTTPClient interface {
+	Get(url string) (*http.Response, error)
+}
+
+type DiscordSender interface {
+	Send(text, name, avatar string, embed interface{}) error
+	SendWithCustomAvatar(text, name, avatarURL string, embed interface{}) error
+}
 
 type Plugin interface {
 	Name() string
@@ -17,8 +26,9 @@ type Plugin interface {
 }
 
 type PluginContext struct {
-	Discord *common.DiscordClient
-	Info    *log.Logger
-	Error   *log.Logger
-	Context *context.Context
+	Discord    DiscordSender
+	Info       *log.Logger
+	Error      *log.Logger
+	Context    *context.Context
+	HTTPClient HTTPClient
 }

@@ -1,18 +1,19 @@
 package plugins
 
 import (
-	"17thshard.com/sanderson-notifications/common"
+	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"math"
-	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type ProgressPlugin struct {
-	Url     string
-	Message string
+	Url           string
+	Message       string
+	DebounceDelay time.Duration
 }
 
 func (plugin ProgressPlugin) Name() string {
@@ -28,11 +29,93 @@ func (plugin ProgressPlugin) Validate() error {
 		return fmt.Errorf("message for progress updates must not be empty")
 	}
 
+	if plugin.DebounceDelay < 0 {
+		return fmt.Errorf("debounce delay must not be negative")
+	}
+
+	return nil
+}
+
+type ProgressOffset struct {
+	PublishedState []Progress  // What Discord users have seen
+	ObservedState  []Progress  // What we've observed from website
+	DebounceStart  *time.Time  // When debounce period started (nil = not debouncing)
+}
+
+// IsDebouncing returns true if we're currently in a debounce period
+func (p ProgressOffset) IsDebouncing() bool {
+	return p.DebounceStart != nil
+}
+
+// DebounceElapsed returns true if the debounce period has elapsed
+func (p ProgressOffset) DebounceElapsed(duration time.Duration) bool {
+	if !p.IsDebouncing() {
+		return false
+	}
+	return time.Since(*p.DebounceStart) >= duration
+}
+
+// HasChanges returns true if there are changes between published and observed state
+func (p ProgressOffset) HasChanges() bool {
+	changes := diff(p.PublishedState, p.ObservedState)
+	return changes != nil
+}
+
+// GetPendingChanges returns the diff between published and observed state
+func (p ProgressOffset) GetPendingChanges() []ProgressDiff {
+	return diff(p.PublishedState, p.ObservedState)
+}
+
+// ShouldPublish determines if we should publish changes based on debounce settings
+func (p ProgressOffset) ShouldPublish(debounceDelay time.Duration) bool {
+	if !p.HasChanges() {
+		return false
+	}
+	if debounceDelay == 0 {
+		return true // Immediate mode
+	}
+	return p.IsDebouncing() && p.DebounceElapsed(debounceDelay)
+}
+
+func (p ProgressOffset) ShouldStartDebounce() bool {
+	return !p.IsDebouncing()
+}
+
+func (p ProgressOffset) ShouldResetDebounce(newOffset ProgressOffset) bool {
+	changes := diff(p.ObservedState, newOffset.ObservedState)
+	return changes != nil
+}
+
+// UnmarshalJSON handles both new format and legacy format
+func (p *ProgressOffset) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as new format first
+	type Alias ProgressOffset
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(p),
+	}
+	
+	if err := json.Unmarshal(data, aux); err == nil {
+		// Successfully parsed as new format
+		return nil
+	}
+	
+	// Try legacy format ([]Progress)
+	var legacyProgress []Progress
+	if err := json.Unmarshal(data, &legacyProgress); err != nil {
+		return err
+	}
+	
+	// Convert legacy format to new format
+	p.PublishedState = legacyProgress
+	p.ObservedState = legacyProgress
+	p.DebounceStart = nil
 	return nil
 }
 
 func (plugin ProgressPlugin) OffsetPrototype() interface{} {
-	return []Progress{}
+	return ProgressOffset{}
 }
 
 type Progress struct {
@@ -56,42 +139,71 @@ const (
 
 func (plugin ProgressPlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Println("Checking for progress updates...")
+	
+	var oldOffset ProgressOffset
+	if offset != nil {
+		oldOffset = offset.(ProgressOffset)
+	}
 
-	res, err := http.Get(plugin.Url)
+	res, err := context.HTTPClient.Get(plugin.Url)
 	if err != nil {
-		return offset, fmt.Errorf("could not read progress site '%s': %w", plugin.Url, err)
+		return oldOffset, fmt.Errorf("could not read progress site '%s': %w", plugin.Url, err)
 	}
 	defer res.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		return offset, err
-	}
-
-	var oldProgress []Progress
-	if offset != nil {
-		oldProgress = offset.([]Progress)
+		return oldOffset, err
 	}
 
 	currentProgress, err := readProgress(doc)
 	if err != nil {
-		return oldProgress, err
+		return oldOffset, err
+	}
+	now := time.Now()
+
+	// Update observed state
+	newOffset := ProgressOffset{
+		PublishedState: oldOffset.PublishedState,
+		ObservedState:  currentProgress,
+		DebounceStart:  oldOffset.DebounceStart,
 	}
 
-	differences := diff(oldProgress, currentProgress)
-
-	if differences == nil {
-		context.Info.Println("No progress changes to report.")
-		return oldProgress, nil
+	if !newOffset.HasChanges() {
+		// No changes detected - clear any debouncing
+		context.Info.Println("No progress changes detected, clearing any debouncing...")
+		return ProgressOffset{
+			PublishedState: oldOffset.PublishedState,
+			ObservedState:  currentProgress,
+		}, nil
 	}
 
-	context.Info.Println("Reporting changed progress bars...")
-
-	if err = plugin.reportProgress(context.Discord, differences); err != nil {
-		return oldProgress, err
+	if newOffset.ShouldPublish(plugin.DebounceDelay) {
+		// Publish the changes
+		context.Info.Println("Reporting changed progress bars...")
+		
+		if err = plugin.reportProgress(context.Discord, newOffset.GetPendingChanges()); err != nil {
+			return oldOffset, err
+		}
+		
+		return ProgressOffset{
+			PublishedState: currentProgress, // Update what we published
+			ObservedState:  currentProgress,
+		}, nil
 	}
 
-	return currentProgress, nil
+	// Start or continue debouncing
+	if newOffset.ShouldStartDebounce() {
+		context.Info.Println("Progress changes detected, starting debounce timer...")
+		newOffset.DebounceStart = &now
+	} else if newOffset.ShouldResetDebounce(oldOffset) {
+		context.Info.Println("Progress changes detected, resetting debounce timer...")
+		newOffset.DebounceStart = &now
+	} else {
+		context.Info.Println("Progress changes detected, continuing debounce timer...")
+	}
+
+	return newOffset, nil
 }
 
 func readProgress(doc *goquery.Document) ([]Progress, error) {
@@ -153,7 +265,7 @@ func diff(old, new []Progress) []ProgressDiff {
 	return result
 }
 
-func (plugin ProgressPlugin) reportProgress(client *common.DiscordClient, progressBars []ProgressDiff) error {
+func (plugin ProgressPlugin) reportProgress(client DiscordSender, progressBars []ProgressDiff) error {
 	var embedBuilder strings.Builder
 
 	for i, progress := range progressBars {
