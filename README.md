@@ -167,33 +167,61 @@ The YAML structure for this plugin's configuration is as follows:
 ```yaml
 url: https://brandonsanderson.com
 message: The progress bars on Brandon's website were updated!
+debounceDelay: 2m
 ```
-| Field     | Mandatory | Description                                                   |
-|-----------|:---------:|---------------------------------------------------------------|
-| `url`     |    ✔️     | URL of the author's website                                   |
-| `message` |    ✔️     | Message to display preceding the embed with progress updates  |
+| Field           | Mandatory | Description                                                   |
+|-----------------|:---------:|---------------------------------------------------------------|
+| `url`           |    ✔️     | URL of the author's website                                   |
+| `message`       |    ✔️     | Message to display preceding the embed with progress updates  |
+| `debounceDelay` |     ❌     | Wait time after last change before posting (e.g. "2m", "30s"). If omitted or "0", posts immediately |
 
 #### Offset format
-Offsets are stored as a JSON array of JSON objects with the following structure
+Offsets are stored as a JSON object with the following structure:
 ```json
 {
-  "Title": "Progress Bar 1",
-  "Link": "https://example.com",
-  "Value": 100
+  "PublishedState": [
+    {
+      "Title": "Progress Bar 1",
+      "Link": "https://example.com",
+      "Value": 75
+    },
+    {
+      "Title": "Progress Bar 2", 
+      "Link": "",
+      "Value": 100
+    }
+  ],
+  "ObservedState": [
+    {
+      "Title": "Progress Bar 1",
+      "Link": "https://example.com", 
+      "Value": 80
+    },
+    {
+      "Title": "Progress Bar 2",
+      "Link": "",
+      "Value": 100
+    }
+  ],
+  "DebounceStart": "2023-10-15T14:30:00Z"
 }
 ```
-All values refer to the respective property of a progress bar on the website.
-There is one object like this for each progress bar.
+- `PublishedState`: The progress bar state that was last posted to Discord
+- `ObservedState`: The current progress bar state observed from the website
+- `DebounceStart`: When the debounce period started (null when not debouncing)
+
+When `debounceDelay` is configured, changes are detected by comparing `PublishedState` vs `ObservedState`. If differences exist and the debounce period has elapsed, the current `ObservedState` is posted to Discord and becomes the new `PublishedState`.
 
 #### Change detection
-The offset format is generated from the HTML on the website. Afterwards, a diff between the two states is generated:
- * Progress bars that exist on the website but not in the stored offset are marked as *new*
- * Progress bars that exist on the website and in the stored offset but have different progress values are marked as *changed*
- * Progress bars that exist on the website and in the stored offset and have the same progress values are *retained*
- * Progress bars that exist in the stored offset but not on the website are *ignored*
+Progress bars are scraped from the website HTML and compared with the stored `PublishedState`:
+ * Progress bars that exist on the website but not in `PublishedState` are marked as *new*
+ * Progress bars that exist in both but have different progress values are marked as *changed*
+ * Progress bars that exist in both with the same progress values are *retained*
+ * Progress bars that exist in `PublishedState` but not on the website are *ignored*
 
-This diff is independent of the order of the progress bars in either state.
-If after this process there are *new* or *changed* progress bars, a Discord message with all current progress bars is produced.
+If any *new* or *changed* progress bars are detected:
+- With `debounceDelay = 0`: Changes are posted immediately
+- With `debounceDelay > 0`: A debounce timer starts/resets, and changes are posted only after the delay period with no further changes
 
 ### Twitter Timeline (`twitter`)
 Checks a Twitter account's timeline for new tweets. This *includes* retweets, but *omits* replies.
