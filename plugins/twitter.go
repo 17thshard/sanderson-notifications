@@ -4,10 +4,11 @@ import (
 	goContext "context"
 	"encoding/json"
 	"fmt"
-	twitterscraper "github.com/imperatrona/twitter-scraper"
 	"net/http"
 	"os"
 	"strconv"
+
+	twitterscraper "github.com/imperatrona/twitter-scraper"
 )
 
 type TwitterPlugin struct {
@@ -22,8 +23,8 @@ type TwitterPlugin struct {
 	LoginPassword   string `mapstructure:"loginPassword"`
 	LoginCookiePath string `mapstructure:"cookiePath"`
 
-	retweetExclusions map[string]bool
 	scraper           *twitterscraper.Scraper
+	retweetExclusions map[string]bool
 }
 
 func (plugin *TwitterPlugin) Name() string {
@@ -35,16 +36,21 @@ func (plugin *TwitterPlugin) Validate() error {
 		return fmt.Errorf("account name for Twitter must not be empty")
 	}
 
+	return nil
+}
+
+func (plugin *TwitterPlugin) OffsetPrototype() interface{} {
+	return ""
+}
+
+func (plugin *TwitterPlugin) Init() error {
+	plugin.scraper = twitterscraper.New().WithReplies(true)
 	plugin.retweetExclusions = make(map[string]bool)
 	for _, account := range plugin.ExcludedRetweetAccounts {
 		plugin.retweetExclusions[account] = true
 	}
 
 	return nil
-}
-
-func (plugin *TwitterPlugin) OffsetPrototype() interface{} {
-	return ""
 }
 
 type Tweet struct {
@@ -75,8 +81,6 @@ func (plugin *TwitterPlugin) Check(offset interface{}, context PluginContext) (i
 	if err != nil {
 		return nil, fmt.Errorf("latest Tweet ID '%s' is not valid snowflake: %w", lastTweet, err)
 	}
-
-	plugin.scraper = twitterscraper.New().WithReplies(true)
 
 	err = plugin.login(context)
 	if err != nil {

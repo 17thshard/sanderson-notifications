@@ -1,8 +1,6 @@
 package main
 
 import (
-	. "17thshard.com/sanderson-notifications/common"
-	. "17thshard.com/sanderson-notifications/plugins"
 	"context"
 	"encoding/json"
 	"flag"
@@ -11,6 +9,9 @@ import (
 	"os"
 	"reflect"
 	"sync"
+
+	. "17thshard.com/sanderson-notifications/common"
+	. "17thshard.com/sanderson-notifications/plugins"
 )
 
 func main() {
@@ -79,8 +80,22 @@ func main() {
 
 	for _, connector := range config.Connectors {
 		connector := connector
+
 		connectorInfo, connectorError := CreateLoggers(fmt.Sprintf("connector=%s", connector.Name))
-		pluginContext := PluginContext{Discord: &client, Info: connectorInfo, Error: connectorError, Context: &ctx, HTTPClient: &http.Client{}}
+		pluginContext := PluginContext{
+			Discord: &client,
+			Info:    connectorInfo,
+			Error:   connectorError,
+			Context: &ctx,
+			HTTP:    &http.Client{},
+		}
+
+		err = (*connector.Plugin).Init()
+		if err != nil {
+			pluginContext.Error.Printf("Init for connector '%s' failed: %s", connector.Name, err)
+			continue
+		}
+
 		go func() {
 			defer wg.Done()
 			var offset interface{}

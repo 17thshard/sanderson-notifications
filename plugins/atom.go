@@ -2,12 +2,12 @@ package plugins
 
 import (
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/mmcdole/gofeed/atom"
-	"net/http"
 	"slices"
 	"sort"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/mmcdole/gofeed/atom"
 )
 
 type AtomPlugin struct {
@@ -18,8 +18,6 @@ type AtomPlugin struct {
 	ExcludedTags []string       `mapstructure:"excludedTags"`
 	MinAge       *time.Duration `mapstructure:"minAge"`
 	MaxAge       *time.Duration `mapstructure:"maxAge"`
-
-	client *http.Client
 }
 
 func (plugin *AtomPlugin) Name() string {
@@ -36,6 +34,10 @@ func (plugin *AtomPlugin) Validate() error {
 
 func (plugin *AtomPlugin) OffsetPrototype() interface{} {
 	return map[string]bool{}
+}
+
+func (plugin *AtomPlugin) Init() error {
+	return nil
 }
 
 type AtomPost struct {
@@ -70,13 +72,7 @@ func (posts ByTimestamp) Swap(i, j int) {
 func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Printf("Checking Atom feed at %s for updates...", plugin.FeedURL)
 
-	plugin.client = &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	res, err := plugin.client.Get(plugin.FeedURL)
+	res, err := context.HTTP.Get(plugin.FeedURL)
 	if err != nil {
 		return offset, fmt.Errorf("could not read Atom feed at '%s': %w", plugin.FeedURL, err)
 	}
@@ -115,7 +111,7 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 		}
 
 		link := entry.Links[0].Href
-		hasExcludedTag, err := plugin.HasExcludedTag(link)
+		hasExcludedTag, err := plugin.HasExcludedTag(link, context.HTTP)
 		if err != nil {
 			return offset, fmt.Errorf("could not fully handle Atom feed at '%s': %w", plugin.FeedURL, err)
 		}
@@ -194,12 +190,12 @@ func (plugin *AtomPlugin) Check(offset interface{}, context PluginContext) (inte
 	return handledEntries, nil
 }
 
-func (plugin *AtomPlugin) HasExcludedTag(link string) (bool, error) {
+func (plugin *AtomPlugin) HasExcludedTag(link string, httpClient HTTPClient) (bool, error) {
 	if len(plugin.ExcludedTags) == 0 {
 		return false, nil
 	}
 
-	res, err := http.Get(link)
+	res, err := httpClient.Get(link)
 
 	if err != nil {
 		return false, fmt.Errorf("could not read entry '%s': %w", link, err)

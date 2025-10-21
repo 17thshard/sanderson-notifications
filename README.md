@@ -169,17 +169,17 @@ url: https://brandonsanderson.com
 message: The progress bars on Brandon's website were updated!
 debounceDelay: 2m
 ```
-| Field           | Mandatory | Description                                                   |
-|-----------------|:---------:|---------------------------------------------------------------|
-| `url`           |    ✔️     | URL of the author's website                                   |
-| `message`       |    ✔️     | Message to display preceding the embed with progress updates  |
+| Field           | Mandatory | Description                                                                                         |
+|-----------------|:---------:|-----------------------------------------------------------------------------------------------------|
+| `url`           |    ✔️     | URL of the author's website                                                                         |
+| `message`       |    ✔️     | Message to display preceding the embed with progress updates                                        |
 | `debounceDelay` |     ❌     | Wait time after last change before posting (e.g. "2m", "30s"). If omitted or "0", posts immediately |
 
 #### Offset format
 Offsets are stored as a JSON object with the following structure:
 ```json
 {
-  "PublishedState": [
+  "Published": [
     {
       "Title": "Progress Bar 1",
       "Link": "https://example.com",
@@ -191,7 +191,7 @@ Offsets are stored as a JSON object with the following structure:
       "Value": 100
     }
   ],
-  "ObservedState": [
+  "Observed": [
     {
       "Title": "Progress Bar 1",
       "Link": "https://example.com", 
@@ -206,22 +206,22 @@ Offsets are stored as a JSON object with the following structure:
   "DebounceStart": "2023-10-15T14:30:00Z"
 }
 ```
-- `PublishedState`: The progress bar state that was last posted to Discord
-- `ObservedState`: The current progress bar state observed from the website
-- `DebounceStart`: When the debounce period started (null when not debouncing)
+ * `Published`: The progress bar state that was last posted to Discord
+ * `Observed`: The current progress bar state observed from the website
+ * `DebounceStart`: When the debounce period started (null when not debouncing)
 
-When `debounceDelay` is configured, changes are detected by comparing `PublishedState` vs `ObservedState`. If differences exist and the debounce period has elapsed, the current `ObservedState` is posted to Discord and becomes the new `PublishedState`.
+When `debounceDelay` is configured, changes are detected by comparing `Published` and `Observed`. If differences exist and the debounce period has elapsed, the changes are posted to Discord and `Observed` becomes the new `Published` state.
 
 #### Change detection
-Progress bars are scraped from the website HTML and compared with the stored `PublishedState`:
- * Progress bars that exist on the website but not in `PublishedState` are marked as *new*
+Progress bars are scraped from the website HTML and compared with the stored `Published` state:
+ * Progress bars that exist on the website but not in `Published` are marked as *new*
  * Progress bars that exist in both but have different progress values are marked as *changed*
  * Progress bars that exist in both with the same progress values are *retained*
- * Progress bars that exist in `PublishedState` but not on the website are *ignored*
+ * Progress bars that exist in `Published` but not on the website are *ignored*
 
 If any *new* or *changed* progress bars are detected:
-- With `debounceDelay = 0`: Changes are posted immediately
-- With `debounceDelay > 0`: A debounce timer starts/resets, and changes are posted only after the delay period with no further changes
+ * With `debounceDelay = 0`: Changes are posted immediately
+ * With `debounceDelay > 0`: A debounce timer starts/resets, and changes are posted only after the delay period with no further changes
 
 ### Twitter Timeline (`twitter`)
 Checks a Twitter account's timeline for new tweets. This *includes* retweets, but *omits* replies.

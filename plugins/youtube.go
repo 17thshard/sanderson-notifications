@@ -2,12 +2,13 @@ package plugins
 
 import (
 	"fmt"
-	"github.com/mmcdole/gofeed/atom"
-	"google.golang.org/api/option"
-	"google.golang.org/api/youtube/v3"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/mmcdole/gofeed/atom"
+	"google.golang.org/api/option"
+	"google.golang.org/api/youtube/v3"
 )
 
 type YouTubePlugin struct {
@@ -17,8 +18,8 @@ type YouTubePlugin struct {
 	Token             string
 	ExcludedPostTypes []string `mapstructure:"excludedPostTypes"`
 
-	excludedTypes map[string]bool
-	client        *http.Client
+	excludedTypes     map[string]bool
+	nonRedirectClient HTTPClient
 }
 
 func (plugin *YouTubePlugin) Name() string {
@@ -34,16 +35,26 @@ func (plugin *YouTubePlugin) Validate() error {
 		return fmt.Errorf("API token for YouTube must not be empty")
 	}
 
-	plugin.excludedTypes = make(map[string]bool)
-	for _, postType := range plugin.ExcludedPostTypes {
-		plugin.excludedTypes[postType] = true
-	}
-
 	return nil
 }
 
 func (plugin *YouTubePlugin) OffsetPrototype() interface{} {
 	return map[string]bool{}
+}
+
+func (plugin *YouTubePlugin) Init() error {
+	plugin.excludedTypes = make(map[string]bool)
+	for _, postType := range plugin.ExcludedPostTypes {
+		plugin.excludedTypes[postType] = true
+	}
+
+	plugin.nonRedirectClient = &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	return nil
 }
 
 type YouTubePost struct {
@@ -56,13 +67,7 @@ type YouTubePost struct {
 func (plugin *YouTubePlugin) Check(offset interface{}, context PluginContext) (interface{}, error) {
 	context.Info.Println("Checking for YouTube updates...")
 
-	plugin.client = &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	res, err := plugin.client.Get(fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", url.QueryEscape(plugin.ChannelId)))
+	res, err := context.HTTP.Get(fmt.Sprintf("https://www.youtube.com/feeds/videos.xml?channel_id=%s", url.QueryEscape(plugin.ChannelId)))
 	if err != nil {
 		return offset, fmt.Errorf("could not read YouTube feed for channel '%s': %w", plugin.ChannelId, err)
 	}
@@ -132,7 +137,7 @@ func (plugin *YouTubePlugin) Check(offset interface{}, context PluginContext) (i
 	}
 
 	for _, entry := range sortedEntries {
-		info, err := plugin.buildPostInfo(entry, youtubeService)
+		info, err := plugin.buildPostInfo(entry, youtubeService, context.HTTP)
 		if err != nil {
 			return handledEntries, err
 		}
@@ -177,7 +182,7 @@ type postInfo struct {
 	FormatMessage   func(string) string
 }
 
-func (plugin *YouTubePlugin) buildPostInfo(entry YouTubePost, youtubeService *youtube.Service) (*postInfo, error) {
+func (plugin *YouTubePlugin) buildPostInfo(entry YouTubePost, youtubeService *youtube.Service, httpClient HTTPClient) (*postInfo, error) {
 	if entry.VideoID == "" {
 		return nil, nil
 	}
@@ -243,7 +248,7 @@ func (plugin *YouTubePlugin) buildLiveEventInfo(entry YouTubePost, youtubeServic
 }
 
 func (plugin *YouTubePlugin) buildShortInfo(entry YouTubePost) (*postInfo, error) {
-	response, err := plugin.client.Head(fmt.Sprintf("https://www.youtube.com/shorts/%s", entry.VideoID))
+	response, err := plugin.nonRedirectClient.Head(fmt.Sprintf("https://www.youtube.com/shorts/%s", entry.VideoID))
 
 	if err != nil {
 		return nil, err
